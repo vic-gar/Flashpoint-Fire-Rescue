@@ -119,8 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
-<<<<<<< Updated upstream
-=======
+
 --- !u!1 &177470103
 GameObject:
   m_ObjectHideFlags: 0
@@ -174,7 +173,6 @@ MonoBehaviour:
   rows: 6
   columns: 8
   cellSize: 1
->>>>>>> Stashed changes
 --- !u!1 &189927060
 GameObject:
   m_ObjectHideFlags: 0
