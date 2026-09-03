@@ -8,6 +8,9 @@ public class BoardManager : MonoBehaviour
     public GameObject firePrefab;
     public GameObject poiPrefab;
     public GameObject exitPrefab;
+    public GameObject firefighterPrefab;
+
+    public Transform firefightersParent;
 
     public int rows = 6;
     public int columns = 8;
@@ -30,6 +33,7 @@ public class BoardManager : MonoBehaviour
         GenerateFires();
         GeneratePOIs();
         GenerateExits();
+        GenerateFirefighters();
     }
 
     void GenerateBoard()
@@ -328,5 +332,32 @@ public class BoardManager : MonoBehaviour
         }
 
         return false;
+    }
+
+    void GenerateFirefighters()
+    {
+        foreach (FirefighterData firefighter in boardData.firefighters)
+        {
+            Vector3 position = new Vector3(
+                firefighter.column * cellSize,
+                0.4f,
+                -firefighter.row * cellSize
+            );
+
+            GameObject firefighterObject = Instantiate(
+                firefighterPrefab,
+                position,
+                Quaternion.identity,
+                firefightersParent
+            );
+
+            FirefighterView view =
+                firefighterObject.GetComponent<FirefighterView>();
+
+            if (view != null)
+            {
+                view.Initialize(firefighter);
+            }
+        }
     }
 }

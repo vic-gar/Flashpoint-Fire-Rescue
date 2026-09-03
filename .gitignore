@@ -106,3 +106,8 @@ InitTestScene*.unity*
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
 .vscode/
+
+# Python
+.venv/
+__pycache__/
+*.pyc

@@ -134,6 +134,66 @@ public static class BoardFileReader
             );
         }
 
+        // =========================
+        // Crear bomberos iniciales
+        // =========================
+
+        if (boardData.exits.Count >= 4)
+        {
+            ExitData exit1 = boardData.exits[0];
+            ExitData exit2 = boardData.exits[1];
+            ExitData exit3 = boardData.exits[2];
+            ExitData exit4 = boardData.exits[3];
+
+            boardData.firefighters.Add(
+                new FirefighterData(
+                    1,
+                    exit1.row,
+                    exit1.column
+                )
+            );
+
+            boardData.firefighters.Add(
+                new FirefighterData(
+                    2,
+                    exit1.row,
+                    exit1.column
+                )
+            );
+
+            boardData.firefighters.Add(
+                new FirefighterData(
+                    3,
+                    exit2.row,
+                    exit2.column
+                )
+            );
+
+            boardData.firefighters.Add(
+                new FirefighterData(
+                    4,
+                    exit2.row,
+                    exit2.column
+                )
+            );
+
+            boardData.firefighters.Add(
+                new FirefighterData(
+                    5,
+                    exit3.row,
+                    exit3.column
+                )
+            );
+
+            boardData.firefighters.Add(
+                new FirefighterData(
+                    6,
+                    exit4.row,
+                    exit4.column
+                )
+            );
+        }
+
         return boardData;
     }
 }

@@ -11,6 +11,7 @@ public class BoardData
     public List<FireData> fires;
     public List<POIData> pois;
     public List<ExitData> exits;
+    public List<FirefighterData> firefighters;
 
     public BoardData(int rows, int columns)
     {
@@ -22,5 +23,6 @@ public class BoardData
         fires = new List<FireData>();
         pois = new List<POIData>();
         exits = new List<ExitData>();
+        firefighters = new List<FirefighterData>();
     }
 }
