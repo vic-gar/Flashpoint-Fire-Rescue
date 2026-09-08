@@ -1,5 +1,23 @@
+using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Construye el tablero de Flash Point a partir del archivo de
+/// configuración y lo instancia en la escena.
+///
+/// Se puede usar de dos maneras:
+///
+/// - En Play: Start() construye el tablero como siempre.
+/// - En el editor: los botones "Generate Preview" y "Clear Preview"
+///   del inspector permiten ver y acomodar el tablero sin entrar a
+///   Play.
+///
+/// Todo lo que genera queda etiquetado con BoardPreviewMarker, así
+/// que siempre se puede limpiar exactamente lo generado sin tocar
+/// los objetos propios de la escena. Start() limpia antes de
+/// construir, de modo que si quedó un preview guardado en la escena
+/// no aparecen objetos duplicados al darle Play.
+/// </summary>
 public class BoardManager : MonoBehaviour
 {
     public GameObject cellPrefab;
@@ -10,6 +28,9 @@ public class BoardManager : MonoBehaviour
     public GameObject exitPrefab;
     public GameObject firefighterPrefab;
 
+    [Tooltip("Opcional. Si se deja vacío se reutiliza el prefab de POI.")]
+    public GameObject victimPrefab;
+
     public Transform firefightersParent;
 
     public int rows = 6;
@@ -19,7 +40,39 @@ public class BoardManager : MonoBehaviour
 
     private BoardData boardData;
 
+    // Referencias a los objetos que cambian durante la partida, para
+    // poder moverlos o retirarlos cuando llega un estado nuevo del
+    // servidor en vez de reconstruir el tablero entero cada turno.
+    private readonly Dictionary<int, GameObject> firefighterObjects =
+        new Dictionary<int, GameObject>();
+
+    private readonly Dictionary<string, GameObject> fireObjects =
+        new Dictionary<string, GameObject>();
+
+    private readonly Dictionary<string, GameObject> smokeObjects =
+        new Dictionary<string, GameObject>();
+
+    private readonly Dictionary<string, GameObject> poiObjects =
+        new Dictionary<string, GameObject>();
+
     void Start()
+    {
+        // Si la escena venía con un preview guardado, se retira antes
+        // de construir para no terminar con el tablero por duplicado.
+        ClearBoard();
+
+        BuildBoard();
+    }
+
+    // =========================================================
+    // API pública: construir y limpiar
+    // =========================================================
+
+    /// <summary>
+    /// Lee el archivo del tablero y genera todos los objetos.
+    /// Funciona igual en Play y en el editor.
+    /// </summary>
+    public void BuildBoard()
     {
         boardData = BoardFileReader.LoadBoard("final");
 
@@ -36,6 +89,120 @@ public class BoardManager : MonoBehaviour
         GenerateFirefighters();
     }
 
+    /// <summary>
+    /// Elimina únicamente los objetos generados por este componente.
+    /// Los objetos que forman parte de la escena original no se tocan
+    /// porque no llevan la etiqueta BoardPreviewMarker.
+    /// </summary>
+    public int ClearBoard()
+    {
+        BoardPreviewMarker[] generated =
+            FindObjectsByType<BoardPreviewMarker>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            );
+
+        int removed = 0;
+
+        foreach (BoardPreviewMarker marker in generated)
+        {
+            if (marker == null)
+            {
+                continue;
+            }
+
+            DestroySafely(marker.gameObject);
+            removed++;
+        }
+
+        firefighterObjects.Clear();
+        fireObjects.Clear();
+        smokeObjects.Clear();
+        poiObjects.Clear();
+
+        return removed;
+    }
+
+    /// <summary>
+    /// Cuenta cuántos objetos generados hay ahora en la escena.
+    /// El inspector lo usa para informar el estado del preview.
+    /// </summary>
+    public int CountGeneratedObjects()
+    {
+        return FindObjectsByType<BoardPreviewMarker>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None
+        ).Length;
+    }
+
+    // =========================================================
+    // Instanciación
+    // =========================================================
+
+    /// <summary>
+    /// Instancia un prefab y lo marca como generado por el tablero.
+    /// Todas las creaciones pasan por aquí para que nunca quede un
+    /// objeto sin etiquetar que después no se pueda limpiar.
+    /// </summary>
+    private GameObject Spawn(
+        GameObject prefab,
+        Vector3 position,
+        Quaternion rotation,
+        Transform parent,
+        string name
+    )
+    {
+        if (prefab == null)
+        {
+            return null;
+        }
+
+        GameObject instance = Instantiate(
+            prefab,
+            position,
+            rotation,
+            parent
+        );
+
+        if (!string.IsNullOrEmpty(name))
+        {
+            instance.name = name;
+        }
+
+        if (instance.GetComponent<BoardPreviewMarker>() == null)
+        {
+            instance.AddComponent<BoardPreviewMarker>();
+        }
+
+        return instance;
+    }
+
+    /// <summary>
+    /// Destruye un objeto de forma válida tanto en Play como en el
+    /// editor. Destroy no surte efecto inmediato fuera de Play, por
+    /// eso ahí se usa DestroyImmediate.
+    /// </summary>
+    private void DestroySafely(GameObject target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(target);
+        }
+        else
+        {
+            DestroyImmediate(target);
+        }
+    }
+
+    // =========================================================
+    // Generación del escenario
+    // =========================================================
+
     void GenerateBoard()
     {
         for (int row = 0; row < boardData.rows; row++)
@@ -48,31 +215,27 @@ public class BoardManager : MonoBehaviour
                     -row * cellSize
                 );
 
-                GameObject cellObject = Instantiate(
+                GameObject cellObject = Spawn(
                     cellPrefab,
                     position,
                     Quaternion.identity,
-                    transform
+                    transform,
+                    null
                 );
 
-                CellView cellView = cellObject.GetComponent<CellView>();
-
-                if (cellView != null)
+                if (cellObject != null)
                 {
-                    cellView.Initialize(row, column);
+                    CellView cellView = cellObject.GetComponent<CellView>();
+
+                    if (cellView != null)
+                    {
+                        cellView.Initialize(row, column);
+                    }
                 }
 
                 CellData data = boardData.cells[row][column];
 
                 CreateWalls(data, position);
-
-                Debug.Log(
-                    $"Cell {row + 1},{column + 1} | " +
-                    $"U:{data.wallUp} " +
-                    $"L:{data.wallLeft} " +
-                    $"D:{data.wallDown} " +
-                    $"R:{data.wallRight}"
-                );
             }
         }
     }
@@ -87,15 +250,18 @@ public class BoardManager : MonoBehaviour
                 -fire.row * cellSize
             );
 
-            GameObject fireObject = Instantiate(
+            GameObject fireObject = Spawn(
                 firePrefab,
                 position,
                 Quaternion.identity,
-                transform
+                transform,
+                $"Fire_{fire.row + 1}_{fire.column + 1}"
             );
 
-            fireObject.name =
-                $"Fire_{fire.row + 1}_{fire.column + 1}";
+            if (fireObject != null)
+            {
+                fireObjects[CellKey(fire.row, fire.column)] = fireObject;
+            }
         }
     }
 
@@ -126,16 +292,14 @@ public class BoardManager : MonoBehaviour
                 rotation = Quaternion.Euler(0, 90, 0);
             }
 
-            GameObject doorObject = Instantiate(
+            Spawn(
                 doorPrefab,
                 doorPosition + new Vector3(0, 0.5f, 0),
                 rotation,
-                transform
-            );
-
-            doorObject.name =
+                transform,
                 $"Door_{door.row1 + 1}_{door.column1 + 1}_" +
-                $"{door.row2 + 1}_{door.column2 + 1}";
+                $"{door.row2 + 1}_{door.column2 + 1}"
+            );
         }
     }
 
@@ -149,15 +313,13 @@ public class BoardManager : MonoBehaviour
                 -exit.row * cellSize
             );
 
-            GameObject exitObject = Instantiate(
+            Spawn(
                 exitPrefab,
                 position,
                 Quaternion.identity,
-                transform
+                transform,
+                $"Exit_{exit.row + 1}_{exit.column + 1}"
             );
-
-            exitObject.name =
-                $"Exit_{exit.row + 1}_{exit.column + 1}";
         }
     }
 
@@ -171,22 +333,24 @@ public class BoardManager : MonoBehaviour
                 -poi.row * cellSize
             );
 
-            GameObject poiObject = Instantiate(
+            GameObject poiObject = Spawn(
                 poiPrefab,
                 position,
                 Quaternion.identity,
-                transform
+                transform,
+                $"POI_{poi.row + 1}_{poi.column + 1}"
             );
 
-            poiObject.name =
-                $"POI_{poi.row + 1}_{poi.column + 1}";
-
-            POIView poiView =
-                poiObject.GetComponent<POIView>();
-
-            if (poiView != null)
+            if (poiObject != null)
             {
-                poiView.Initialize(poi);
+                POIView poiView = poiObject.GetComponent<POIView>();
+
+                if (poiView != null)
+                {
+                    poiView.Initialize(poi);
+                }
+
+                poiObjects[CellKey(poi.row, poi.column)] = poiObject;
             }
         }
     }
@@ -213,19 +377,13 @@ public class BoardManager : MonoBehaviour
 
         if (data.wallUp && !doorUp)
         {
-            Vector3 position =
-                cellPosition +
-                new Vector3(0, 0.5f, half);
-
-            GameObject wall = Instantiate(
+            Spawn(
                 wallPrefab,
-                position,
+                cellPosition + new Vector3(0, 0.5f, half),
                 Quaternion.identity,
-                transform
+                transform,
+                $"Wall_Up_{data.row + 1}_{data.column + 1}"
             );
-
-            wall.name =
-                $"Wall_Up_{data.row + 1}_{data.column + 1}";
         }
 
         // =========================
@@ -246,19 +404,13 @@ public class BoardManager : MonoBehaviour
 
         if (data.wallLeft && !doorLeft)
         {
-            Vector3 position =
-                cellPosition +
-                new Vector3(-half, 0.5f, 0);
-
-            GameObject wall = Instantiate(
+            Spawn(
                 wallPrefab,
-                position,
+                cellPosition + new Vector3(-half, 0.5f, 0),
                 Quaternion.Euler(0, 90, 0),
-                transform
+                transform,
+                $"Wall_Left_{data.row + 1}_{data.column + 1}"
             );
-
-            wall.name =
-                $"Wall_Left_{data.row + 1}_{data.column + 1}";
         }
 
         // =========================
@@ -267,19 +419,13 @@ public class BoardManager : MonoBehaviour
 
         if (data.row == rows - 1 && data.wallDown)
         {
-            Vector3 position =
-                cellPosition +
-                new Vector3(0, 0.5f, -half);
-
-            GameObject wall = Instantiate(
+            Spawn(
                 wallPrefab,
-                position,
+                cellPosition + new Vector3(0, 0.5f, -half),
                 Quaternion.identity,
-                transform
+                transform,
+                $"Wall_Down_{data.row + 1}_{data.column + 1}"
             );
-
-            wall.name =
-                $"Wall_Down_{data.row + 1}_{data.column + 1}";
         }
 
         // =========================
@@ -288,19 +434,13 @@ public class BoardManager : MonoBehaviour
 
         if (data.column == columns - 1 && data.wallRight)
         {
-            Vector3 position =
-                cellPosition +
-                new Vector3(half, 0.5f, 0);
-
-            GameObject wall = Instantiate(
+            Spawn(
                 wallPrefab,
-                position,
+                cellPosition + new Vector3(half, 0.5f, 0),
                 Quaternion.Euler(0, 90, 0),
-                transform
+                transform,
+                $"Wall_Right_{data.row + 1}_{data.column + 1}"
             );
-
-            wall.name =
-                $"Wall_Right_{data.row + 1}_{data.column + 1}";
         }
     }
 
@@ -344,20 +484,244 @@ public class BoardManager : MonoBehaviour
                 -firefighter.row * cellSize
             );
 
-            GameObject firefighterObject = Instantiate(
+            // Si no se asignó un contenedor en el inspector se usa el
+            // propio Board, para que el preview nunca deje objetos
+            // sueltos en la raíz de la escena.
+            Transform parent = firefightersParent != null
+                ? firefightersParent
+                : transform;
+
+            GameObject firefighterObject = Spawn(
                 firefighterPrefab,
                 position,
                 Quaternion.identity,
-                firefightersParent
+                parent,
+                null
             );
 
-            FirefighterView view =
-                firefighterObject.GetComponent<FirefighterView>();
-
-            if (view != null)
+            if (firefighterObject != null)
             {
-                view.Initialize(firefighter);
+                FirefighterView view =
+                    firefighterObject.GetComponent<FirefighterView>();
+
+                if (view != null)
+                {
+                    view.Initialize(firefighter);
+                }
+
+                firefighterObjects[firefighter.id] = firefighterObject;
             }
         }
+    }
+
+    // =========================================================
+    // Sincronización con el servidor
+    // =========================================================
+
+    /// <summary>
+    /// Actualiza la escena con el estado que envía el servidor.
+    ///
+    /// En vez de reconstruir el tablero cada turno, se mueven los
+    /// bomberos y se crean o retiran únicamente los marcadores que
+    /// cambiaron. Así la simulación se ve fluida y no se pierde lo
+    /// que el usuario tenga seleccionado en la escena.
+    /// </summary>
+    public void ApplyState(SimulationState state)
+    {
+        if (state == null)
+        {
+            return;
+        }
+
+        SyncFirefighters(state.bomberos);
+
+        SyncMarkers(
+            fireObjects,
+            state.fuegos,
+            firePrefab,
+            "Fire",
+            0.25f,
+            1.0f
+        );
+
+        // El humo se dibuja con el mismo prefab del fuego pero más
+        // pequeño. Cuando exista un prefab propio de humo basta con
+        // cambiarlo aquí.
+        SyncMarkers(
+            smokeObjects,
+            state.humos,
+            firePrefab,
+            "Smoke",
+            0.2f,
+            0.5f
+        );
+
+        SyncPOIs(state.pois);
+    }
+
+    private void SyncFirefighters(FirefighterState[] firefighters)
+    {
+        if (firefighters == null)
+        {
+            return;
+        }
+
+        foreach (FirefighterState firefighter in firefighters)
+        {
+            if (!firefighterObjects.TryGetValue(firefighter.id, out GameObject go))
+            {
+                continue;
+            }
+
+            if (go == null)
+            {
+                continue;
+            }
+
+            go.transform.position = CellToWorld(
+                firefighter.fila,
+                firefighter.columna,
+                0.4f
+            );
+        }
+    }
+
+    private void SyncMarkers(
+        Dictionary<string, GameObject> registry,
+        CellPosition[] positions,
+        GameObject prefab,
+        string prefix,
+        float height,
+        float scale
+    )
+    {
+        if (positions == null)
+        {
+            return;
+        }
+
+        HashSet<string> present = new HashSet<string>();
+
+        foreach (CellPosition position in positions)
+        {
+            string key = CellKey(position.fila, position.columna);
+
+            present.Add(key);
+
+            if (registry.ContainsKey(key) && registry[key] != null)
+            {
+                continue;
+            }
+
+            GameObject marker = Spawn(
+                prefab,
+                CellToWorld(position.fila, position.columna, height),
+                Quaternion.identity,
+                transform,
+                $"{prefix}_{position.fila + 1}_{position.columna + 1}"
+            );
+
+            if (marker == null)
+            {
+                continue;
+            }
+
+            marker.transform.localScale *= scale;
+
+            registry[key] = marker;
+        }
+
+        RemoveMissing(registry, present);
+    }
+
+    private void SyncPOIs(POIState[] pois)
+    {
+        if (pois == null)
+        {
+            return;
+        }
+
+        HashSet<string> present = new HashSet<string>();
+
+        foreach (POIState poi in pois)
+        {
+            string key = CellKey(poi.fila, poi.columna);
+
+            present.Add(key);
+
+            if (HasLiveEntry(poiObjects, key))
+            {
+                continue;
+            }
+
+            // Una víctima ya revelada usa su propio prefab si está
+            // asignado; si no, se reutiliza el de POI.
+            GameObject prefab = poiPrefab;
+
+            if (poi.revelado && poi.tipo == "v" && victimPrefab != null)
+            {
+                prefab = victimPrefab;
+            }
+
+            GameObject marker = Spawn(
+                prefab,
+                CellToWorld(poi.fila, poi.columna, 0.15f),
+                Quaternion.identity,
+                transform,
+                $"POI_{poi.fila + 1}_{poi.columna + 1}"
+            );
+
+            if (marker != null)
+            {
+                poiObjects[key] = marker;
+            }
+        }
+
+        RemoveMissing(poiObjects, present);
+    }
+
+    private bool HasLiveEntry(
+        Dictionary<string, GameObject> registry,
+        string key
+    )
+    {
+        return registry.ContainsKey(key) && registry[key] != null;
+    }
+
+    private void RemoveMissing(
+        Dictionary<string, GameObject> registry,
+        HashSet<string> present
+    )
+    {
+        List<string> obsolete = new List<string>();
+
+        foreach (KeyValuePair<string, GameObject> entry in registry)
+        {
+            if (!present.Contains(entry.Key))
+            {
+                obsolete.Add(entry.Key);
+            }
+        }
+
+        foreach (string key in obsolete)
+        {
+            DestroySafely(registry[key]);
+            registry.Remove(key);
+        }
+    }
+
+    /// <summary>Posición en el mundo del centro de una celda.</summary>
+    public Vector3 CellToWorld(int row, int column, float height)
+    {
+        return new Vector3(
+            column * cellSize,
+            height,
+            -row * cellSize
+        );
+    }
+
+    private string CellKey(int row, int column)
+    {
+        return $"{row}_{column}";
     }
 }
