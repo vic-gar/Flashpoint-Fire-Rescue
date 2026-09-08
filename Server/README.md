@@ -11,6 +11,12 @@ en la máquina de Carlos y con Python 3.13 en el entorno de desarrollo.
 Las 150 pruebas pasan en los dos, y `run_batch.py 100 comparar` da los
 mismos resultados lógicos en ambos (0 / 38 / 44).
 
+**Instalación: usa `pip install mesa==3.5.1`, no
+`pip install -r requirements.txt`.** El `requirements.txt` está guardado
+en UTF-16 y pip no lo lee, así que ese comando falla. Es un archivo
+original del repositorio y no se ha reguardado sin autorización del
+equipo. Ver "Pendientes de este lado" al final.
+
 En Windows la suite tarda varios minutos y en Linux unos segundos. La
 diferencia está en las pruebas del servidor, que abren conexiones HTTP a
 "localhost"; no afecta a ningún resultado.
@@ -123,7 +129,9 @@ que la manda al servidor en el `POST /reset`.
     python run_batch.py 100 comparar             las 3 estrategias, semillas 0 a 99
 
 `comparar` deja cuatro CSV en esta carpeta: uno por estrategia con una
-fila por partida y `resultados_comparacion.csv` con los promedios.
+fila por partida y `resultados_comparacion.csv` con los promedios. Los
+cuatro están versionados en el repositorio, porque son la evidencia del
+criterio de rendimiento. Volver a correr `comparar` los reemplaza.
 
 ## Servidor
 
@@ -176,10 +184,13 @@ Prueba rápida sin Unity, con el servidor corriendo en otra terminal:
 ## Pendientes de este lado
 
 - Confirmar el umbral de colapso (24 o 25).
-- Decidir si los CSV de resultados se versionan o se regeneran.
-- Decidir el tamaño del experimento final: con 100 semillas la ventaja
-  de la mejorada sobre la aleatoria es clara, pero el aporte de la
-  coordinación no alcanza significancia; con 500 semillas sí (ver
-  docs/ESTADO_ACTUAL.md). `python run_batch.py 500 comparar` tarda
-  alrededor de un minuto y reemplaza los CSV.
+- Decidir el tamaño del experimento final. Con 100 semillas la ventaja de
+  la mejorada sobre la aleatoria es clara, pero el aporte de la
+  coordinación no: hay 28 pares discordantes, 17 a favor de la
+  coordinación y 11 en contra, y una prueba de signos sobre eso da
+  p = 0.34. Con la tasa de discordancia observada (25.7%) hacen falta
+  unos 38 pares discordantes para tener 80% de potencia, o sea alrededor
+  de 148 semillas. Recomendación: 300, no 500.
+  `python run_batch.py 300 comparar` reemplaza los cuatro CSV. Ver
+  docs/ESTADO_ACTUAL.md.
 - Reguardar `requirements.txt` en UTF-8 cuando el equipo lo autorice.
