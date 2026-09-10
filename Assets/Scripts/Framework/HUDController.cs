@@ -78,6 +78,20 @@ public class HUDController : MonoBehaviour
     // Estado interno
     // ---------------------------------------------------------
 
+    /// <summary>
+    /// Si la partida sigue corriendo.
+    ///
+    /// OJO: SimulationState tiene su propio EnCurso(), pero aquí no se
+    /// guarda el estado completo, solo los contadores que SimulationClient
+    /// copia en cada respuesta. Por eso se compara contra la cadena que
+    /// manda el servidor ("en_curso", "victoria", "derrota_victimas" o
+    /// "derrota_colapso"), que es la misma que usa SimulationState.
+    /// </summary>
+    private bool EnCurso()
+    {
+        return client != null && client.ultimoResultado == "en_curso";
+    }
+
     private int rescatadasPrevias = -1;
     private int perdidasPrevias = -1;
     private int danioPrevio = -1;
@@ -93,7 +107,7 @@ public class HUDController : MonoBehaviour
     {
         if (client == null)
         {
-            client = FindFirstObjectByType<SimulationClient>();
+            client = FindAnyObjectByType<SimulationClient>();
         }
 
         if (overlay != null)
@@ -166,7 +180,7 @@ public class HUDController : MonoBehaviour
         perdidasPrevias = client.perdidas;
         danioPrevio = client.danio;
 
-        if (!client.EnCurso() && !overlayMostrado)
+        if (!EnCurso() && !overlayMostrado)
         {
             MostrarOverlay();
         }
@@ -324,7 +338,7 @@ public class HUDController : MonoBehaviour
         }
 
         bool critico =
-            client.EnCurso() &&
+            EnCurso() &&
             client.danio >= limiteDanio - 7;
 
         if (!critico)

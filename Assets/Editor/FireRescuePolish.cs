@@ -58,9 +58,48 @@ public static class FireRescuePolish
     // MENÚ
     // =====================================================
 
+    /// <summary>
+    /// Comprueba que la escena abierta sea la del juego.
+    ///
+    /// Por qué existe: al salir de Safe Mode, Unity puede abrir una
+    /// escena vacía "Untitled" en vez de MainScene. Si el polish corre
+    /// ahí, los muebles, la luz y el HUD se construyen en una escena que
+    /// nadie va a guardar, y parece que el menú no hizo nada.
+    /// </summary>
+    private static bool EscenaCorrecta()
+    {
+        if (Object.FindFirstObjectByType<BoardManager>() != null)
+        {
+            return true;
+        }
+
+        string abierta = EditorSceneManager.GetActiveScene().name;
+
+        if (string.IsNullOrEmpty(abierta))
+        {
+            abierta = "sin guardar";
+        }
+
+        EditorUtility.DisplayDialog(
+            "Escena equivocada",
+            "La escena abierta es \"" + abierta + "\" y no tiene " +
+            "BoardManager.\n\n" +
+            "Abre Assets/Scenes/MainScene.unity y vuelve a ejecutar " +
+            "esto. Si te pregunta si guardas la escena actual, di que no.",
+            "Entendido"
+        );
+
+        return false;
+    }
+
     [MenuItem("Tools/Fire Rescue/Aplicar TODO el polish visual", false, 0)]
     public static void Todo()
     {
+        if (!EscenaCorrecta())
+        {
+            return;
+        }
+
         PasoMateriales();
         PasoVFX();
         PasoPersonajes();
@@ -118,6 +157,11 @@ public static class FireRescuePolish
     [MenuItem("Tools/Fire Rescue/4 - Vestir habitaciones", false, 23)]
     public static void PasoProps()
     {
+        if (!EscenaCorrecta())
+        {
+            return;
+        }
+
         CrearCarpetas();
         VestirHabitaciones();
 
@@ -128,12 +172,32 @@ public static class FireRescuePolish
     [MenuItem("Tools/Fire Rescue/5 - Construir HUD", false, 24)]
     public static void PasoHUD()
     {
-        if (TMP_Settings.defaultFontAsset == null)
+        if (!EscenaCorrecta())
+        {
+            return;
+        }
+
+        // TMP_Settings carga su asset desde Resources la primera vez. Si
+        // los recursos esenciales todavía no se han importado, esa lectura
+        // puede lanzar excepción en vez de devolver null, así que se
+        // pregunta dentro de un try.
+        bool tmpListo;
+
+        try
+        {
+            tmpListo = TMP_Settings.defaultFontAsset != null;
+        }
+        catch (System.Exception)
+        {
+            tmpListo = false;
+        }
+
+        if (!tmpListo)
         {
             EditorUtility.DisplayDialog(
                 "Falta TextMeshPro",
                 "Abre Window > TextMeshPro > Import TMP Essential Resources, " +
-                "acepta, y vuelve a ejecutar este paso.",
+                "pulsa Import TMP Essentials, y vuelve a ejecutar este paso.",
                 "Entendido"
             );
 
@@ -160,6 +224,7 @@ public static class FireRescuePolish
         CrearCarpeta("Assets", "_Polish");
         CrearCarpeta(RaizArte, "Materials");
         CrearCarpeta(RaizArte, "Textures");
+        CrearCarpeta(RaizArte, "Fonts");
         CrearCarpeta(RaizArte, "Prefabs");
         CrearCarpeta("Assets", "Models");
         CrearCarpeta("Assets/Models", "FireRescue");
@@ -200,6 +265,11 @@ public static class FireRescuePolish
         {
             Mate("Bombero_" + (i + 1), ColoresBombero[i], 0.18f);
         }
+
+        // Piso y pared dejan de ser color plano y pasan a tener textura
+        // con normal map. Es el cambio que quita la sensacion de bloques
+        // pintados.
+        TexturizarMateriales();
     }
 
     private static Material Mate(
@@ -259,6 +329,69 @@ public static class FireRescuePolish
         PintarPrefab("Wall", "Pared");
         PintarPrefab("Door", "Puerta");
         PintarPrefab("Exit", "Salida");
+
+        // Sin esto las 48 celdas muestran el mismo dibujo de duela y el
+        // piso queda con cara de mosaico repetido.
+        VariarSuperficie("Cell", true, 0.11f);
+        VariarSuperficie("Wall", false, 0.13f);
+    }
+
+    /// <summary>
+    /// Agrega SuperficieVariada al prefab y lo configura.
+    ///
+    /// El componente se pone sobre el objeto que tiene el Renderer, que
+    /// no siempre es la raíz del prefab.
+    /// </summary>
+    private static void VariarSuperficie(
+        string prefab,
+        bool soloEnU,
+        float brillo
+    )
+    {
+        string ruta = RutaPrefabsJuego + "/" + prefab + ".prefab";
+
+        // LoadPrefabContents lanza excepción si la ruta no existe, así
+        // que se comprueba antes igual que en PintarPrefab.
+        if (!File.Exists(ruta))
+        {
+            Debug.LogWarning("[Fire Rescue] No encontré " + ruta);
+            return;
+        }
+
+        GameObject raiz = PrefabUtility.LoadPrefabContents(ruta);
+
+        if (raiz == null)
+        {
+            return;
+        }
+
+        try
+        {
+            Renderer r = raiz.GetComponentInChildren<Renderer>(true);
+
+            if (r == null)
+            {
+                return;
+            }
+
+            SuperficieVariada v =
+                r.gameObject.GetComponent<SuperficieVariada>();
+
+            if (v == null)
+            {
+                v = r.gameObject.AddComponent<SuperficieVariada>();
+            }
+
+            v.soloEnU = soloEnU;
+            v.variacionBrillo = brillo;
+            v.desplazamiento = 1f;
+
+            PrefabUtility.SaveAsPrefabAsset(raiz, ruta);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(raiz);
+        }
     }
 
     /// <summary>
@@ -1342,13 +1475,256 @@ public static class FireRescuePolish
     /// </summary>
     private static void CrearSpritesHUD()
     {
-        PanelRedondeado("T_Panel", 64, 14, 0f);
-        PanelRedondeado("T_PanelBorde", 64, 14, 3f);
-        Degradado("T_Brillo", 8, 64);
+        // Los PNG buenos ya vienen en el proyecto: los iconos son de
+        // Lucide (licencia ISC) y los paneles se dibujaron fuera de
+        // Unity con antialias por supermuestreo. Aqui solo se dibuja lo
+        // que falte, por si alguien borra un archivo.
+        SiFalta("T_Panel", () => PanelRedondeado("T_Panel", 64, 14, 0f));
+        SiFalta("T_PanelBorde",
+                () => PanelRedondeado("T_PanelBorde", 64, 14, 3f));
+        SiFalta("T_Brillo", () => Degradado("T_Brillo", 8, 64));
 
-        Icono("T_IconRescate", DibujarPersona);
-        Icono("T_IconPerdida", DibujarPersonaCaida);
-        Icono("T_IconDanio", DibujarEdificio);
+        SiFalta("T_IconRescate", () => Icono("T_IconRescate", DibujarPersona));
+        SiFalta("T_IconPerdida",
+                () => Icono("T_IconPerdida", DibujarPersonaCaida));
+        SiFalta("T_IconDanio", () => Icono("T_IconDanio", DibujarEdificio));
+
+        // Bordes de 9-slice. El borde tiene que ser algo mayor que el
+        // radio de la esquina o Unity estira la curva y se deforma.
+        Sliced("T_Panel", 22f);
+        Sliced("T_PanelSuave", 30f);
+        Sliced("T_Marco", 22f);
+        Sliced("T_Capsula", 15f);
+        Sliced("T_Vineta", 0f);
+
+        string[] iconos =
+        {
+            "T_IconRescate", "T_IconPerdida", "T_IconDanio",
+            "T_IconTurno", "T_IconFuego", "T_IconEstrategia",
+            "T_IconAlerta"
+        };
+
+        foreach (string ic in iconos)
+        {
+            Sliced(ic, 0f);
+        }
+    }
+
+    private static bool ExisteTextura(string nombre)
+    {
+        return System.IO.File.Exists(RutaTexturas + "/" + nombre + ".png");
+    }
+
+    private static void SiFalta(string nombre, System.Action generar)
+    {
+        if (!ExisteTextura(nombre))
+        {
+            generar();
+        }
+    }
+
+    private static void Sliced(string nombre, float borde)
+    {
+        if (!ExisteTextura(nombre))
+        {
+            return;
+        }
+
+        ImportarSprite(
+            RutaTexturas + "/" + nombre + ".png",
+            new Vector4(borde, borde, borde, borde)
+        );
+    }
+
+    // =====================================================
+    // Texturas de superficie (piso, pared)
+    // =====================================================
+
+    /// <summary>
+    /// Pone albedo y normal map en los materiales del tablero.
+    ///
+    /// El tiling es 1 a proposito: la celda mide 1 unidad de mundo y la
+    /// textura esta hecha para cubrir exactamente 1 unidad. Con un
+    /// valor mayor el patron se repetiria dentro de la misma celda y el
+    /// piso se veria a escala de casa de munecas.
+    ///
+    /// Las texturas son seamless, asi que la celda de al lado continua
+    /// el patron y no se ve una reja de costuras en el tablero.
+    /// </summary>
+    private static void TexturizarMateriales()
+    {
+        Superficie("Piso", "T_PisoDuela");
+        Superficie("PisoAlterno", "T_PisoLoseta");
+        Superficie("Pared", "T_ParedYeso");
+    }
+
+    private static void Superficie(string material, string textura)
+    {
+        string rutaA = RutaTexturas + "/" + textura + "_A.png";
+        string rutaN = RutaTexturas + "/" + textura + "_N.png";
+
+        if (!System.IO.File.Exists(rutaA))
+        {
+            return;
+        }
+
+        ConfigurarSuperficie(rutaA, false);
+        ConfigurarSuperficie(rutaN, true);
+
+        Material m = AssetDatabase.LoadAssetAtPath<Material>(
+            RutaMateriales + "/M_" + material + ".mat"
+        );
+
+        if (m == null)
+        {
+            return;
+        }
+
+        Texture2D albedo = AssetDatabase.LoadAssetAtPath<Texture2D>(rutaA);
+
+        if (albedo != null)
+        {
+            m.SetTexture("_MainTex", albedo);
+        }
+
+        Texture2D normal = AssetDatabase.LoadAssetAtPath<Texture2D>(rutaN);
+
+        if (normal != null)
+        {
+            m.SetTexture("_BumpMap", normal);
+
+            // Sin la keyword el Standard shader ignora el normal map
+            // aunque este asignado en el material.
+            m.EnableKeyword("_NORMALMAP");
+        }
+
+        m.SetTextureScale("_MainTex", Vector2.one);
+
+        // El color pasa a blanco porque el tono ya viene en el albedo.
+        // Si se dejara el color plano anterior, la textura saldria
+        // tenida y volveriamos a ver una superficie de color liso.
+        m.color = Color.white;
+
+        EditorUtility.SetDirty(m);
+    }
+
+    private static void ConfigurarSuperficie(string ruta, bool esNormal)
+    {
+        AssetDatabase.ImportAsset(ruta);
+
+        TextureImporter imp = AssetImporter.GetAtPath(ruta) as TextureImporter;
+
+        if (imp == null)
+        {
+            return;
+        }
+
+        // Un normal map importado como textura de color se ve morado y
+        // la luz rebota mal. El tipo tiene que ser NormalMap.
+        imp.textureType = esNormal
+            ? TextureImporterType.NormalMap
+            : TextureImporterType.Default;
+
+        imp.sRGBTexture = !esNormal;
+        imp.wrapMode = TextureWrapMode.Repeat;
+        imp.filterMode = FilterMode.Trilinear;
+        imp.mipmapEnabled = true;
+        imp.anisoLevel = 4;
+        imp.SaveAndReimport();
+    }
+
+    // =====================================================
+    // Tipografia
+    // =====================================================
+
+    /// <summary>
+    /// Crea el TMP_FontAsset de Barlow Condensed a partir del TTF.
+    ///
+    /// Barlow Condensed es licencia SIL Open Font 1.1 (el OFL.txt viene
+    /// en la misma carpeta). Se eligio condensada porque en un HUD las
+    /// etiquetas son largas y el espacio horizontal es lo que escasea.
+    ///
+    /// Si algo falla se devuelve null y el HUD se queda con la
+    /// tipografia por defecto de TextMeshPro. Prefiero un HUD feo a un
+    /// HUD que no compila la noche antes de entregar.
+    /// </summary>
+    private static TMP_FontAsset CrearFuente()
+    {
+        string ttf = RaizArte + "/Fonts/BarlowCondensed-SemiBold.ttf";
+        string destino = RaizArte + "/Fonts/F_Barlow.asset";
+
+        // AssetDatabase.CreateAsset falla si la carpeta no esta dada de
+        // alta, aunque exista en disco.
+        CrearCarpeta(RaizArte, "Fonts");
+
+        TMP_FontAsset ya =
+            AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(destino);
+
+        if (ya != null)
+        {
+            return ya;
+        }
+
+        Font fuente = AssetDatabase.LoadAssetAtPath<Font>(ttf);
+
+        if (fuente == null)
+        {
+            Debug.LogWarning(
+                "FireRescuePolish: no encontre " + ttf +
+                ". El HUD usa la tipografia por defecto."
+            );
+
+            return null;
+        }
+
+        try
+        {
+            TMP_FontAsset fa = TMP_FontAsset.CreateFontAsset(fuente);
+
+            if (fa == null)
+            {
+                return null;
+            }
+
+            AssetDatabase.CreateAsset(fa, destino);
+
+            // El atlas y el material son sub-assets. Sin esto, al
+            // recargar el proyecto la fuente queda sin textura y todo
+            // el HUD sale en blanco.
+            if (fa.atlasTextures != null && fa.atlasTextures.Length > 0)
+            {
+                fa.atlasTextures[0].name = "Atlas";
+                AssetDatabase.AddObjectToAsset(fa.atlasTextures[0], fa);
+            }
+
+            if (fa.material != null)
+            {
+                fa.material.name = "Material";
+                AssetDatabase.AddObjectToAsset(fa.material, fa);
+            }
+
+            // Se hornean de una vez los caracteres que usa el HUD para
+            // que tambien funcione en una build y no solo en el editor.
+            fa.TryAddCharacters(
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+                "abcdefghijklmnopqrstuvwxyz" +
+                "0123456789 /:.,-()"
+            );
+
+            EditorUtility.SetDirty(fa);
+            AssetDatabase.SaveAssets();
+
+            return fa;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning(
+                "FireRescuePolish: no pude crear el TMP_FontAsset (" +
+                e.Message + "). El HUD usa la tipografia por defecto."
+            );
+
+            return null;
+        }
     }
 
     private static void PanelRedondeado(
@@ -1559,6 +1935,34 @@ public static class FireRescuePolish
     // HUD
     // =====================================================
 
+    /// <summary>
+    /// Construye el HUD de juego.
+    ///
+    /// Reglas de la composicion, para que se pueda repetir si hay que
+    /// mover algo:
+    ///
+    /// 1. Nada de tarjetas. En vez de recuadros hay dos degradados
+    ///    pegados al borde superior e inferior. El texto se lee sobre
+    ///    cualquier fondo y la pantalla no parece un tablero de datos.
+    ///
+    /// 2. Los grupos van anclados a las esquinas y no comparten espacio
+    ///    horizontal. Identidad a la izquierda, turno a la derecha,
+    ///    objetivos abajo. En 1920 de ancho quedan mas de mil pixeles
+    ///    entre el grupo izquierdo y el derecho, asi que un texto largo
+    ///    ya no puede encimarse con otro: antes ambos vivian dentro del
+    ///    mismo panel de 430 y por eso se traslapaban.
+    ///
+    /// 3. Jerarquia por tamano y peso, no por cajas. Un solo numero
+    ///    grande (el turno), etiquetas chicas muy espaciadas y barras
+    ///    de 4 pixeles.
+    ///
+    /// 4. Un acento de color por fila y nada mas. El rojo del titulo,
+    ///    el verde de rescatadas, el ambar de perdidas y el rojo del
+    ///    daño. El resto es gris.
+    ///
+    /// Todo queda como GameObjects normales: se puede mover, cambiar de
+    /// color o borrar desde la jerarquia sin tocar el codigo.
+    /// </summary>
     private static void ConstruirHUD()
     {
         Transform padre = BuscarOCrear("Canvases");
@@ -1591,90 +1995,338 @@ public static class FireRescuePolish
         escala.matchWidthOrHeight = 0.5f;
 
         HUDController ctrl = hud.AddComponent<HUDController>();
-        ctrl.client = Object.FindFirstObjectByType<SimulationClient>();
+        ctrl.client = Object.FindAnyObjectByType<SimulationClient>();
 
-        Color tinta = Hex("E8EDF2");
-        Color tenue = Hex("8A96A3");
-        Color panelFondo = new Color(0.055f, 0.075f, 0.10f, 0.88f);
+        Color tinta = Hex("EDF1F5");
+        Color tenue = Hex("94A0AC");
+        Color azul = Hex("6FA8DC");
+        Color rojo = Hex("D23B32");
 
-        // ---------- Cabecera ----------
-        GameObject header = Panel(hud.transform, "Header",
-            new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(32f, -32f), new Vector2(430f, 128f),
-            panelFondo);
+        // ---------- Fondos de borde ----------
+        Vineta(hud.transform, "VinetaSuperior", true, 210f, 0.80f);
+        Vineta(hud.transform, "VinetaInferior", false, 250f, 0.78f);
 
-        Acento(header.transform, Hex("D23B32"));
+        // ---------- Identidad, arriba a la izquierda ----------
+        RectTransform ident = Grupo(hud.transform, "Identidad",
+            new Vector2(0f, 1f), new Vector2(44f, -38f),
+            new Vector2(620f, 96f));
 
-        Texto(header.transform, "Titulo", "FIRE RESCUE",
-            new Vector2(20f, -16f), new Vector2(300f, 34f),
-            30f, tinta, FontStyles.Bold);
+        Barra(ident, "Acento", new Vector2(0f, -1f),
+              new Vector2(3f, 56f), rojo);
 
-        Texto(header.transform, "Subtitulo", "OPERATION STATUS",
-            new Vector2(21f, -50f), new Vector2(300f, 20f),
-            13f, tenue, FontStyles.Normal);
+        Texto(ident, "Titulo", "FIRE RESCUE",
+            new Vector2(18f, 0f), new Vector2(520f, 34f),
+            28f, tinta, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 7f);
 
-        ctrl.estadoPunto = Punto(header.transform, "EstadoPunto",
-            new Vector2(21f, -80f), 12f, Hex("5C9BD6"));
+        ctrl.estrategiaTexto = Texto(ident, "Estrategia", "...",
+            new Vector2(19f, -36f), new Vector2(520f, 18f),
+            14f, azul, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 9f);
 
-        ctrl.estadoTexto = Texto(header.transform, "Estado", "STANDBY",
-            new Vector2(40f, -74f), new Vector2(260f, 22f),
-            15f, tinta, FontStyles.Bold);
+        ctrl.estadoPunto = Punto(ident, "EstadoPunto",
+            new Vector2(20f, -62f), 9f, azul);
 
-        Texto(header.transform, "TurnoEtiqueta", "TURN",
-            new Vector2(-96f, -18f), new Vector2(80f, 18f),
-            12f, tenue, FontStyles.Normal, TextAlignmentOptions.Right,
-            new Vector2(1f, 1f));
+        ctrl.estadoTexto = Texto(ident, "Estado", "STANDBY",
+            new Vector2(37f, -64f), new Vector2(480f, 18f),
+            13f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 7f);
 
-        ctrl.turnoTexto = Texto(header.transform, "Turno", "000",
-            new Vector2(-16f, -34f), new Vector2(120f, 48f),
-            42f, tinta, FontStyles.Bold, TextAlignmentOptions.Right,
-            new Vector2(1f, 1f));
+        // ---------- Turno, arriba a la derecha ----------
+        RectTransform reloj = Grupo(hud.transform, "Turno",
+            new Vector2(1f, 1f), new Vector2(-44f, -38f),
+            new Vector2(240f, 96f));
 
-        ctrl.estrategiaTexto = Texto(header.transform, "Estrategia", "...",
-            new Vector2(-16f, -86f), new Vector2(240f, 20f),
-            13f, Hex("5C9BD6"), FontStyles.Bold,
-            TextAlignmentOptions.Right, new Vector2(1f, 1f));
+        Texto(reloj, "TurnoEtiqueta", "TURN",
+            new Vector2(0f, 0f), new Vector2(230f, 16f),
+            12f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 11f);
 
-        // ---------- Paneles de métricas ----------
-        float y = -176f;
+        ctrl.turnoTexto = Texto(reloj, "Turno", "000",
+            new Vector2(2f, -16f), new Vector2(230f, 62f),
+            52f, tinta, FontStyles.Bold,
+            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 1f);
 
-        GameObject pRescate = PanelMetrica(hud.transform, "RescuePanel",
-            "VICTIMS RESCUED", y, panelFondo, Hex("35A06A"),
-            "T_IconRescate",
+        // ---------- Objetivos, abajo a la izquierda ----------
+        RectTransform objetivos = Grupo(hud.transform, "Objetivos",
+            new Vector2(0f, 0f), new Vector2(44f, 44f),
+            new Vector2(AnchoFila, 200f));
+
+        // De arriba hacia abajo: rescatadas, perdidas, daño. El daño va
+        // al final porque es el que cambia de color y conviene tenerlo
+        // junto al borde, donde se nota el latido.
+        GameObject fRescate = Fila(objetivos, "RescuePanel", 168f,
+            "VICTIMS RESCUED", "T_IconRescate", Hex("35A06A"),
+            tinta, tenue,
             out ctrl.rescatadasTexto, out ctrl.rescatadasBarra,
             out ctrl.rescatadasFlash);
 
-        ctrl.rescatadasPanel = pRescate.GetComponent<RectTransform>();
+        ctrl.rescatadasPanel = fRescate.GetComponent<RectTransform>();
 
-        y -= 104f;
-
-        GameObject pPerdidas = PanelMetrica(hud.transform, "CasualtyPanel",
-            "VICTIMS LOST", y, panelFondo, Hex("E8A33D"),
-            "T_IconPerdida",
+        GameObject fPerdidas = Fila(objetivos, "CasualtyPanel", 98f,
+            "VICTIMS LOST", "T_IconPerdida", Hex("E8A33D"),
+            tinta, tenue,
             out ctrl.perdidasTexto, out ctrl.perdidasBarra,
             out ctrl.perdidasFlash);
 
-        ctrl.perdidasPanel = pPerdidas.GetComponent<RectTransform>();
+        ctrl.perdidasPanel = fPerdidas.GetComponent<RectTransform>();
 
-        y -= 104f;
-
-        GameObject pDanio = PanelMetrica(hud.transform, "DamagePanel",
-            "STRUCTURAL INTEGRITY", y, panelFondo, Hex("D23B32"),
-            "T_IconDanio",
+        GameObject fDanio = Fila(objetivos, "DamagePanel", 28f,
+            "STRUCTURAL INTEGRITY", "T_IconDanio", rojo,
+            tinta, tenue,
             out ctrl.danioTexto, out ctrl.danioBarra,
             out ctrl.danioFlash);
 
-        ctrl.danioPanel = pDanio.GetComponent<RectTransform>();
+        ctrl.danioPanel = fDanio.GetComponent<RectTransform>();
 
-        ctrl.danioEtiqueta = Texto(pDanio.transform, "Estado", "STABLE",
-            new Vector2(-18f, -14f), new Vector2(140f, 20f),
-            13f, tinta, FontStyles.Bold,
-            TextAlignmentOptions.Right, new Vector2(1f, 1f));
+        // STABLE / WARNING / CRITICAL / COLLAPSE, debajo del numero.
+        ctrl.danioEtiqueta = Texto(fDanio.transform, "Estado", "STABLE",
+            new Vector2(0f, -28f), new Vector2(150f, 16f),
+            11f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 9f);
 
         // ---------- Overlay final ----------
         ConstruirOverlay(hud.transform, ctrl, tinta, tenue);
 
+        // ---------- Tipografia ----------
+        // Se aplica al final y de una sola pasada para que alcance
+        // tambien al overlay sin repetir la asignacion en cada Texto().
+        TMP_FontAsset fuente = CrearFuente();
+
+        if (fuente != null)
+        {
+            foreach (TMP_Text t in hud.GetComponentsInChildren<TMP_Text>(true))
+            {
+                t.font = fuente;
+            }
+        }
+
         EditorUtility.SetDirty(hud);
+    }
+
+    private const float AnchoFila = 360f;
+    private const float AltoFila = 56f;
+
+    /// <summary>
+    /// Contenedor vacio anclado a una esquina. Sirve para mover un
+    /// bloque entero del HUD arrastrando un solo objeto.
+    /// </summary>
+    private static RectTransform Grupo(
+        Transform padre,
+        string nombre,
+        Vector2 ancla,
+        Vector2 posicion,
+        Vector2 tamano
+    )
+    {
+        GameObject go = new GameObject(nombre, typeof(RectTransform));
+
+        go.transform.SetParent(padre, false);
+
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = ancla;
+        rt.anchorMax = ancla;
+        rt.pivot = ancla;
+        rt.anchoredPosition = posicion;
+        rt.sizeDelta = tamano;
+
+        return rt;
+    }
+
+    /// <summary>
+    /// Degradado pegado a un borde de la pantalla. Reemplaza a los
+    /// paneles: oscurece lo justo para que el texto se lea sin dibujar
+    /// un recuadro alrededor.
+    /// </summary>
+    private static void Vineta(
+        Transform padre,
+        string nombre,
+        bool arriba,
+        float alto,
+        float opacidad
+    )
+    {
+        GameObject go = new GameObject(nombre,
+            typeof(RectTransform), typeof(Image));
+
+        go.transform.SetParent(padre, false);
+        go.transform.SetAsFirstSibling();
+
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, arriba ? 1f : 0f);
+        rt.anchorMax = new Vector2(1f, arriba ? 1f : 0f);
+
+        // Pivote al centro: al voltear la de abajo en Y, el giro pasa
+        // por el centro del rect y se queda en su sitio. Con el pivote
+        // en el borde se saldria de la pantalla.
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition =
+            new Vector2(0f, arriba ? -alto * 0.5f : alto * 0.5f);
+        rt.sizeDelta = new Vector2(0f, alto);
+
+        if (!arriba)
+        {
+            rt.localScale = new Vector3(1f, -1f, 1f);
+        }
+
+        Image img = go.GetComponent<Image>();
+        img.color = new Color(0.02f, 0.03f, 0.045f, opacidad);
+        img.raycastTarget = false;
+
+        Sprite s = Sprite("T_Vineta");
+
+        if (s != null)
+        {
+            img.sprite = s;
+        }
+    }
+
+    /// <summary>Rectangulo solido. Se usa para el filete de acento.</summary>
+    private static Image Barra(
+        Transform padre,
+        string nombre,
+        Vector2 posicion,
+        Vector2 tamano,
+        Color color
+    )
+    {
+        GameObject go = new GameObject(nombre,
+            typeof(RectTransform), typeof(Image));
+
+        go.transform.SetParent(padre, false);
+
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(0f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.anchoredPosition = posicion;
+        rt.sizeDelta = tamano;
+
+        Image img = go.GetComponent<Image>();
+        img.color = color;
+        img.raycastTarget = false;
+
+        return img;
+    }
+
+    /// <summary>
+    /// Una fila de objetivo: icono, etiqueta, valor y barra fina.
+    ///
+    /// El pivote va a media altura para que el golpe de animacion de
+    /// HUDController crezca desde el centro de la fila. Con el pivote
+    /// en una esquina, el panel se estiraria hacia un lado al recibir
+    /// el golpe.
+    /// </summary>
+    private static GameObject Fila(
+        Transform padre,
+        string nombre,
+        float y,
+        string titulo,
+        string nombreIcono,
+        Color acento,
+        Color tinta,
+        Color tenue,
+        out TMP_Text valor,
+        out Image barra,
+        out Image flash
+    )
+    {
+        GameObject fila = new GameObject(nombre, typeof(RectTransform));
+
+        fila.transform.SetParent(padre, false);
+
+        RectTransform rt = fila.GetComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.zero;
+        rt.pivot = new Vector2(0f, 0.5f);
+        rt.anchoredPosition = new Vector2(0f, y);
+        rt.sizeDelta = new Vector2(AnchoFila, AltoFila);
+
+        flash = Capa(fila.transform, "Flash", acento);
+
+        Sprite ic = Sprite(nombreIcono);
+
+        if (ic != null)
+        {
+            GameObject go = new GameObject("Icono",
+                typeof(RectTransform), typeof(Image));
+
+            go.transform.SetParent(fila.transform, false);
+
+            RectTransform irt = go.GetComponent<RectTransform>();
+            irt.anchorMin = new Vector2(0f, 1f);
+            irt.anchorMax = new Vector2(0f, 1f);
+            irt.pivot = new Vector2(0f, 1f);
+            irt.anchoredPosition = new Vector2(0f, -1f);
+            irt.sizeDelta = new Vector2(18f, 18f);
+
+            Image img = go.GetComponent<Image>();
+            img.sprite = ic;
+            img.color = acento;
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+        }
+
+        Texto(fila.transform, "Titulo", titulo,
+            new Vector2(28f, -2f), new Vector2(215f, 18f),
+            12f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 8f);
+
+        valor = Texto(fila.transform, "Valor", "0 / 0",
+            new Vector2(0f, -1f), new Vector2(150f, 26f),
+            20f, tinta, FontStyles.Bold,
+            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 1f);
+
+        // Riel: 4 pixeles de alto y ancho completo de la fila. Una barra
+        // delgada se lee como HUD; una gruesa se lee como grafica.
+        GameObject riel = new GameObject("BarraFondo",
+            typeof(RectTransform), typeof(Image));
+
+        riel.transform.SetParent(fila.transform, false);
+
+        RectTransform rrt = riel.GetComponent<RectTransform>();
+        rrt.anchorMin = new Vector2(0f, 0f);
+        rrt.anchorMax = new Vector2(1f, 0f);
+        rrt.pivot = new Vector2(0.5f, 0f);
+        rrt.anchoredPosition = new Vector2(0f, 4f);
+        rrt.sizeDelta = new Vector2(0f, 4f);
+
+        Image rimg = riel.GetComponent<Image>();
+        rimg.color = new Color(1f, 1f, 1f, 0.10f);
+        rimg.raycastTarget = false;
+
+        Sprite capsula = Sprite("T_Capsula");
+
+        if (capsula != null)
+        {
+            rimg.sprite = capsula;
+            rimg.type = Image.Type.Sliced;
+            rimg.pixelsPerUnitMultiplier = 9f;
+        }
+
+        GameObject relleno = new GameObject("BarraRelleno",
+            typeof(RectTransform), typeof(Image));
+
+        relleno.transform.SetParent(riel.transform, false);
+
+        RectTransform frt = relleno.GetComponent<RectTransform>();
+        frt.anchorMin = Vector2.zero;
+        frt.anchorMax = Vector2.one;
+        frt.offsetMin = Vector2.zero;
+        frt.offsetMax = Vector2.zero;
+
+        // El relleno va sin sprite a proposito: con Image.Type.Filled el
+        // 9-slice no aplica, y a 4 pixeles de alto la punta cuadrada no
+        // se distingue de una redondeada.
+        barra = relleno.GetComponent<Image>();
+        barra.color = acento;
+        barra.raycastTarget = false;
+        barra.type = Image.Type.Filled;
+        barra.fillMethod = Image.FillMethod.Horizontal;
+        barra.fillOrigin = (int)Image.OriginHorizontal.Left;
+        barra.fillAmount = 0f;
+
+        return fila;
     }
 
     private static void ConstruirOverlay(
@@ -2042,6 +2694,15 @@ public static class FireRescuePolish
 
         Image img = go.GetComponent<Image>();
         img.color = color;
+        img.raycastTarget = false;
+
+        // Sin sprite, un Image es un cuadrado. La capsula lo redondea.
+        Sprite redondo = Sprite("T_Capsula");
+
+        if (redondo != null)
+        {
+            img.sprite = redondo;
+        }
 
         return img;
     }
@@ -2056,7 +2717,8 @@ public static class FireRescuePolish
         Color color,
         FontStyles estilo,
         TextAlignmentOptions alineacion = TextAlignmentOptions.TopLeft,
-        Vector2? ancla = null
+        Vector2? ancla = null,
+        float tracking = 2f
     )
     {
         GameObject go = new GameObject(nombre,
@@ -2080,7 +2742,10 @@ public static class FireRescuePolish
         t.fontStyle = estilo;
         t.alignment = alineacion;
         t.raycastTarget = false;
-        t.characterSpacing = 2f;
+        // El espaciado entre letras se pasa por parametro: los
+        // titulos van muy abiertos y los numeros grandes casi cerrados.
+        // Es lo que hace que un HUD se lea intencional y no por defecto.
+        t.characterSpacing = tracking;
 
         return t;
     }
