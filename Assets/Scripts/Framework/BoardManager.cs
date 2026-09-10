@@ -31,6 +31,12 @@ public class BoardManager : MonoBehaviour
     [Tooltip("Opcional. Si se deja vacío se reutiliza el prefab de POI.")]
     public GameObject victimPrefab;
 
+    [Tooltip("Opcional. Si se deja vacío el humo se dibuja con el prefab de fuego.")]
+    public GameObject smokePrefab;
+
+    [Tooltip("Opcional. Marcador de falsa alarma ya revelada.")]
+    public GameObject falseAlarmPrefab;
+
     public Transform firefightersParent;
 
     public int rows = 6;
@@ -53,6 +59,12 @@ public class BoardManager : MonoBehaviour
         new Dictionary<string, GameObject>();
 
     private readonly Dictionary<string, GameObject> poiObjects =
+        new Dictionary<string, GameObject>();
+
+    // Qué prefab se usó para cada POI. Sin esto no se puede saber si un
+    // marcador ya dibujado corresponde al estado actual: un POI que se
+    // revela como víctima seguiría viéndose como marcador de búsqueda.
+    private readonly Dictionary<string, GameObject> poiPrefabUsed =
         new Dictionary<string, GameObject>();
 
     void Start()
@@ -119,6 +131,7 @@ public class BoardManager : MonoBehaviour
         fireObjects.Clear();
         smokeObjects.Clear();
         poiObjects.Clear();
+        poiPrefabUsed.Clear();
 
         return removed;
     }
@@ -544,16 +557,17 @@ public class BoardManager : MonoBehaviour
             1.0f
         );
 
-        // El humo se dibuja con el mismo prefab del fuego pero más
-        // pequeño. Cuando exista un prefab propio de humo basta con
-        // cambiarlo aquí.
+        // El humo tiene su propio prefab. Si no se asignó uno se cae
+        // al de fuego a media escala, que es como se veía antes.
+        bool humoPropio = smokePrefab != null;
+
         SyncMarkers(
             smokeObjects,
             state.humos,
-            firePrefab,
+            humoPropio ? smokePrefab : firePrefab,
             "Smoke",
             0.2f,
-            0.5f
+            humoPropio ? 1.0f : 0.5f
         );
 
         SyncPOIs(state.pois);
@@ -649,18 +663,35 @@ public class BoardManager : MonoBehaviour
 
             present.Add(key);
 
-            if (HasLiveEntry(poiObjects, key))
-            {
-                continue;
-            }
-
-            // Una víctima ya revelada usa su propio prefab si está
-            // asignado; si no, se reutiliza el de POI.
+            // Qué debería verse ahora mismo en esa celda.
             GameObject prefab = poiPrefab;
 
             if (poi.revelado && poi.tipo == "v" && victimPrefab != null)
             {
                 prefab = victimPrefab;
+            }
+            else if (poi.revelado && poi.tipo == "f" && falseAlarmPrefab != null)
+            {
+                prefab = falseAlarmPrefab;
+            }
+
+            // Si ya hay un marcador y es del tipo correcto, se deja.
+            // Si el POI se acaba de revelar, el prefab cambió y hay que
+            // sustituirlo: antes se quedaba el marcador viejo para
+            // siempre y víctima y falsa alarma se veían igual.
+            if (HasLiveEntry(poiObjects, key))
+            {
+                bool mismoPrefab =
+                    poiPrefabUsed.ContainsKey(key) &&
+                    poiPrefabUsed[key] == prefab;
+
+                if (mismoPrefab)
+                {
+                    continue;
+                }
+
+                DestroySafely(poiObjects[key]);
+                poiObjects.Remove(key);
             }
 
             GameObject marker = Spawn(
@@ -674,6 +705,7 @@ public class BoardManager : MonoBehaviour
             if (marker != null)
             {
                 poiObjects[key] = marker;
+                poiPrefabUsed[key] = prefab;
             }
         }
 

@@ -1,0 +1,21 @@
+newmtl cuerpo
+Kd 0.925 0.925 0.894
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl piel
+Kd 0.851 0.643 0.478
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl pelo
+Kd 0.290 0.251 0.220
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
