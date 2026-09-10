@@ -13,6 +13,7 @@ git add -- \
   Assets/Scripts/Framework/BoardManager.cs \
   Assets/Scripts/Framework/FirefighterVisual.cs \
   Assets/Scripts/Framework/SuperficieVariada.cs \
+  Assets/Scripts/Framework/MarcadorTemporal.cs \
   Assets/_Polish/Fonts \
   Assets/_Polish/Textures \
   docs/AUDITORIA_RUBRICA.md \
@@ -77,7 +78,13 @@ Unity: **Play**.
 - [ ] Los bomberos no salen todos al mismo instante, van escalonados
 - [ ] El piso y las paredes no repiten el mismo dibujo celda por celda
 - [ ] La cámara sigue moviéndose con WASD, rueda y F
-- [ ] Al terminar sale la pantalla final en español
+- [ ] **Cuando un bombero carga a alguien, se le ve el civil al hombro**
+- [ ] Al levantarlo aparece la víctima un momento en esa celda
+- [ ] Al dejarlo en una salida sale un destello verde
+- [ ] La pantalla final **no** es una caja centrada: título grande a la
+      izquierda, tablero visible detrás, sin borde ni línea vertical
+- [ ] La regla bajo el título es verde si ganaste y roja si perdiste
+- [ ] Las estadísticas finales salen en dos columnas alineadas
 
 **El punto que decide todo:** con `Seed 1` en el inspector, la consola tiene
 que decir exactamente:
@@ -128,6 +135,11 @@ Con 1.2 segundos por turno, una partida de 38 turnos dura unos 45 segundos.
 | Intensidad del fuego | `Assets/_Polish/Prefabs/FireVisual` | `Rate over Time` de cada capa |
 | Que no salga vapor al apagar | `Board Manager` | vaciar `Steam Prefab` |
 | Variación entre celdas | `Cell.prefab > Superficie Variada` | `Variacion Brillo` |
+| Cuánto dura la víctima encontrada | `Board Manager` | `Segundos Victima Visible` (0 la apaga) |
+| Que no salga destello al rescatar | `Board Manager` | vaciar `Rescue Prefab` |
+| El civil al hombro estorba | `Firefighter.prefab > Visual > VictimaCargada` | Position, Scale, o bórralo |
+| Tamaño del título final | `GameHUD > EndGameOverlay > Contenido > Titulo` | `Font Size` |
+| Posición del bloque final | `GameHUD > EndGameOverlay > Contenido` | Pos X, Pos Y |
 
 ---
 
@@ -140,6 +152,8 @@ Con 1.2 segundos por turno, una partida de 38 turnos dura unos 45 segundos.
 | El fuego sigue viéndose como antes | El paso 2 del menú no corrió. Ejecútalo suelto. |
 | Las llamas salen acostadas | El renderer volvió a Billboard. En `FireVisual > LlamaCuerpo > Renderer`, ponlo en `Vertical Billboard`. |
 | Sale vapor donde no debería | Vacía `Steam Prefab` en el Board Manager. |
+| Las estadísticas finales salen en una sola columna | La etiqueta `<pos=>` de TMP no se aplicó. Se lee igual, no es error. |
+| El civil al hombro sale del color equivocado | `Assets/_Polish/Materials/M_Victima`, cambia el Albedo. |
 | Todo peor que antes | `git status --short`, revierte solo el archivo culpable |
 
 ---
@@ -152,6 +166,24 @@ Con 1.2 segundos por turno, una partida de 38 turnos dura unos 45 segundos.
 - `TopDownCameraController.cs`.
 - Los CSV de resultados.
 - La rama: `carlos`, sin merge, sin rebase, sin reset.
+
+---
+
+## Por qué antes no se veían las víctimas
+
+Un `/step` es un turno entero. Dentro del mismo turno un bombero puede
+llegar al POI, revelarlo y cargarlo. Unity solo recibe el estado del final
+del turno, así que ese marcador de víctima **nunca existe** en ningún
+estado y la partida puede terminar con siete rescatadas sin que se haya
+visto a nadie.
+
+La solución no necesitó tocar Python: el JSON ya trae
+`bomberos[i].cargando` (`flashpoint_model.py` línea 612, y el campo ya
+estaba en `SimulationState.cs`). Comparando ese campo entre dos estados
+seguidos se sabe cuándo levantan a alguien y cuándo lo entregan.
+
+Ahora se ve la secuencia completa: POI azul girando, víctima al revelarse,
+civil al hombro del bombero mientras camina, destello verde en la salida.
 
 ---
 

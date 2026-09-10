@@ -436,13 +436,23 @@ public class HUDController : MonoBehaviour
         Escribir(overlayTitulo, titulo);
         Escribir(overlaySubtitulo, subtitulo);
 
+        // Dos columnas dentro de un solo objeto de texto. La etiqueta
+        // <pos=> de TextMeshPro corre el cursor a una posición fija en
+        // píxeles, así que las cifras quedan alineadas entre sí sin tener
+        // que crear cinco objetos separados.
+        //
+        // El objeto de texto está en gris y solo el dato va en blanco: es
+        // lo que hace que se lea la cifra y no la etiqueta.
+        string a = "<pos=420><color=#F0F3F6><b>";
+        string b = "</b></color>";
+
         Escribir(
             overlayEstadisticas,
-            $"TURNOS   <b>{client.turno}</b>\n" +
-            $"CIVILES RESCATADOS   <b>{client.rescatadas} / {objetivoRescate}</b>\n" +
-            $"CIVILES PERDIDOS   <b>{client.perdidas} / {limitePerdidas}</b>\n" +
-            $"DAÑO ESTRUCTURAL   <b>{client.danio} / {limiteDanio}</b>\n" +
-            $"ESTRATEGIA   <b>{NombreEstrategia(client.estrategiaActiva)}</b>"
+            $"TURNOS{a}{client.turno}{b}\n" +
+            $"CIVILES RESCATADOS{a}{client.rescatadas} / {objetivoRescate}{b}\n" +
+            $"CIVILES PERDIDOS{a}{client.perdidas} / {limitePerdidas}{b}\n" +
+            $"DAÑO ESTRUCTURAL{a}{client.danio} / {limiteDanio}{b}\n" +
+            $"ESTRATEGIA{a}{NombreEstrategia(client.estrategiaActiva)}{b}"
         );
 
         if (overlayTitulo != null)

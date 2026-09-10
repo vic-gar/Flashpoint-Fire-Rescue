@@ -138,6 +138,7 @@ public static class FireRescuePolish
         ConstruirFuego();
         ConstruirHumo();
         ConstruirVapor();
+        ConstruirRescate();
 
         AssetDatabase.SaveAssets();
         Debug.Log("[Fire Rescue] Fuego y humo construidos.");
@@ -148,6 +149,7 @@ public static class FireRescuePolish
     {
         CrearCarpetas();
         VestirBombero();
+        AgregarVictimaCargada();
         VestirVictimaYPoi();
         ConectarPrefabs();
 
@@ -1004,6 +1006,161 @@ public static class FireRescuePolish
     }
 
     /// <summary>
+    /// Destello verde de un disparo, para cuando un bombero entrega a un
+    /// civil en una salida. Mismo esquema que el vapor: se destruye solo.
+    /// </summary>
+    private static void ConstruirRescate()
+    {
+        Material mat = MaterialParticula(
+            "PartRescate",
+            "Mobile/Particles/Additive",
+            Color.white,
+            "T_Chispa"
+        );
+
+        GameObject raiz = new GameObject("RescueVisual");
+
+        ParticleSystem ps = raiz.AddComponent<ParticleSystem>();
+
+        var main = ps.main;
+        main.duration = 0.6f;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.0f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(1.1f, 2.4f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.06f, 0.14f);
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = 34;
+        main.gravityModifier = 0.25f;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+        main.startColor = new ParticleSystem.MinMaxGradient(
+            Hex("D6FFE4"), Hex("3FAE72"));
+
+        var emision = ps.emission;
+        emision.rateOverTime = 0f;
+        emision.SetBursts(new[]
+        {
+            new ParticleSystem.Burst(0f, (short)26)
+        });
+
+        var forma = ps.shape;
+        forma.shapeType = ParticleSystemShapeType.Cone;
+        forma.angle = 48f;
+        forma.radius = 0.10f;
+        forma.rotation = new Vector3(-90f, 0f, 0f);
+
+        var colorVida = ps.colorOverLifetime;
+        colorVida.enabled = true;
+        colorVida.color = new ParticleSystem.MinMaxGradient(
+            Degradado(
+                new[] { Hex("EAFFF2"), Hex("2E8F5C") },
+                new[] { 0f, 1f },
+                new[] { 0f, 1f, 0f },
+                new[] { 0f, 0.15f, 1f }
+            )
+        );
+
+        var render = ps.GetComponent<ParticleSystemRenderer>();
+        render.sharedMaterial = mat;
+        render.renderMode = ParticleSystemRenderMode.Billboard;
+        render.sortingFudge = -6f;
+
+        GuardarComoPrefab(raiz, RutaPrefabsJuego + "/Rescue.prefab");
+    }
+
+    /// <summary>
+    /// Cuelga un muñeco de víctima del hombro del bombero, apagado.
+    ///
+    /// BoardManager lo enciende mientras `cargando` sea verdadero en el
+    /// JSON. Es la señal más legible de todo el rescate: se ve de un
+    /// vistazo quién lleva a alguien y hacia dónde va.
+    ///
+    /// Cuelga de "Visual" y no de la raíz para que acompañe el suavizado
+    /// del movimiento en vez de ir a saltos.
+    /// </summary>
+    private static void AgregarVictimaCargada()
+    {
+        string ruta = RutaPrefabsJuego + "/Firefighter.prefab";
+
+        if (!File.Exists(ruta))
+        {
+            return;
+        }
+
+        GameObject modelo = AssetDatabase.LoadAssetAtPath<GameObject>(
+            RutaModelos + "/FireRescue_Victima.obj"
+        );
+
+        if (modelo == null)
+        {
+            Debug.LogWarning(
+                "[Fire Rescue] No encontré el modelo de víctima, " +
+                "el bombero no va a mostrar a quién carga."
+            );
+
+            return;
+        }
+
+        GameObject raiz = PrefabUtility.LoadPrefabContents(ruta);
+
+        try
+        {
+            Transform visual = raiz.transform.Find("Visual");
+            Transform padre = visual != null ? visual : raiz.transform;
+
+            Transform vieja = padre.Find("VictimaCargada");
+
+            if (vieja != null)
+            {
+                Object.DestroyImmediate(vieja.gameObject);
+            }
+
+            GameObject copia =
+                (GameObject)PrefabUtility.InstantiatePrefab(modelo);
+
+            copia.name = "VictimaCargada";
+            copia.transform.SetParent(padre, false);
+
+            // Sobre el hombro, cruzada y un poco inclinada. Los números
+            // salen del modelo del bombero: 0.78 de alto.
+            copia.transform.localPosition = new Vector3(0f, 0.62f, -0.05f);
+            copia.transform.localRotation = Quaternion.Euler(0f, 90f, 14f);
+            copia.transform.localScale = Vector3.one * 0.55f;
+
+            Material m = Cargar("Victima");
+
+            if (m != null)
+            {
+                foreach (Renderer r in
+                         copia.GetComponentsInChildren<Renderer>(true))
+                {
+                    Material[] mats = new Material[r.sharedMaterials.Length];
+
+                    for (int i = 0; i < mats.Length; i++)
+                    {
+                        mats[i] = m;
+                    }
+
+                    if (mats.Length == 0)
+                    {
+                        mats = new[] { m };
+                    }
+
+                    r.sharedMaterials = mats;
+                }
+            }
+
+            // Apagado de entrada: solo se enciende mientras carga.
+            copia.SetActive(false);
+
+            PrefabUtility.SaveAsPrefabAsset(raiz, ruta);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(raiz);
+        }
+    }
+
+    /// <summary>
     /// El humo se dibujaba con el prefab del fuego a media escala, así
     /// que se confundían. Aquí se crea un Smoke.prefab propio, con la
     /// misma raíz que espera BoardManager pero con el visual del humo.
@@ -1075,6 +1232,7 @@ public static class FireRescuePolish
         Asignar(so, "victimPrefab", RutaPrefabsJuego + "/Victim.prefab");
         Asignar(so, "falseAlarmPrefab", RutaPrefabsJuego + "/FalseAlarm.prefab");
         Asignar(so, "steamPrefab", RutaPrefabsJuego + "/Steam.prefab");
+        Asignar(so, "rescuePrefab", RutaPrefabsJuego + "/Rescue.prefab");
 
         so.ApplyModifiedProperties();
 
@@ -2643,6 +2801,30 @@ public static class FireRescuePolish
         return fila;
     }
 
+    /// <summary>
+    /// Pantalla de fin de partida.
+    ///
+    /// La versión anterior era una caja de 680x400 centrada con borde y un
+    /// filete de color al costado. Eso es una tarjeta, y una tarjeta
+    /// centrada sobre un juego se lee como panel de reporte.
+    ///
+    /// Esta versión no tiene caja:
+    ///
+    /// - La escena sigue viéndose detrás, solo oscurecida.
+    /// - El bloque de texto va al tercio izquierdo, no centrado. Una
+    ///   composición descentrada se lee como cierre de película; una
+    ///   centrada y encajonada se lee como cuadro de diálogo.
+    /// - El título es enorme y el resto muy chico. Toda la jerarquía sale
+    ///   del tamaño, no de recuadros.
+    /// - El único adorno es una regla horizontal bajo el título que cambia
+    ///   de color según el resultado. Es información, no decoración: verde
+    ///   si se ganó, rojo si se perdió.
+    /// - Las estadísticas van en dos columnas dentro de un solo objeto de
+    ///   texto, alineadas con la etiqueta pos de TextMeshPro.
+    ///
+    /// Todo sigue siendo Canvas y TMP normales, editables desde la
+    /// jerarquía.
+    /// </summary>
     private static void ConstruirOverlay(
         Transform padre,
         HUDController ctrl,
@@ -2665,42 +2847,67 @@ public static class FireRescuePolish
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
 
-        overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+        // Oscurecimiento suave: se sigue viendo el tablero detrás, que es
+        // parte de lo que hace que se lea como final de partida y no como
+        // ventana emergente.
+        overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.74f);
 
         ctrl.overlay = overlay.GetComponent<CanvasGroup>();
 
-        GameObject caja = Panel(overlay.transform, "Caja",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            Vector2.zero, new Vector2(680f, 400f),
-            new Color(0.055f, 0.075f, 0.10f, 0.97f));
+        // Grupo sin fondo. HUDController lo usa para la animación de
+        // entrada, así que tiene que existir aunque no se vea.
+        RectTransform bloque = Grupo(overlay.transform, "Contenido",
+            new Vector2(0f, 0.5f), new Vector2(168f, 20f),
+            new Vector2(1300f, 520f));
 
-        RectTransform cajaRt = caja.GetComponent<RectTransform>();
-        cajaRt.pivot = new Vector2(0.5f, 0.5f);
-        cajaRt.anchoredPosition = Vector2.zero;
+        ctrl.overlayCaja = bloque;
 
-        ctrl.overlayCaja = cajaRt;
+        Texto(bloque, "Antetitulo", "OPERACIÓN FINALIZADA",
+            new Vector2(4f, 0f), new Vector2(700f, 26f),
+            18f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 16f);
 
-        ctrl.overlayAcento = Acento(caja.transform, Hex("D23B32"), 6f);
+        ctrl.overlayTitulo = Texto(bloque, "Titulo", "MISIÓN",
+            new Vector2(0f, -32f), new Vector2(1250f, 118f),
+            92f, tinta, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 3f);
 
-        ctrl.overlayTitulo = Texto(caja.transform, "Titulo", "MISSION",
-            new Vector2(40f, -44f), new Vector2(600f, 56f),
-            46f, tinta, FontStyles.Bold);
+        // Regla horizontal bajo el título. Cambia de color con el
+        // resultado, así que informa en vez de decorar.
+        GameObject regla = new GameObject("Regla",
+            typeof(RectTransform), typeof(Image));
 
-        ctrl.overlaySubtitulo = Texto(caja.transform, "Subtitulo", "",
-            new Vector2(41f, -102f), new Vector2(600f, 26f),
-            17f, tenue, FontStyles.Normal);
+        regla.transform.SetParent(bloque, false);
 
-        Linea(caja.transform, new Vector2(40f, -140f), 600f);
+        RectTransform reglaRt = regla.GetComponent<RectTransform>();
+        reglaRt.anchorMin = new Vector2(0f, 1f);
+        reglaRt.anchorMax = new Vector2(0f, 1f);
+        reglaRt.pivot = new Vector2(0f, 1f);
+        reglaRt.anchoredPosition = new Vector2(4f, -152f);
+        reglaRt.sizeDelta = new Vector2(360f, 3f);
 
-        ctrl.overlayEstadisticas = Texto(caja.transform, "Estadisticas", "",
-            new Vector2(41f, -160f), new Vector2(600f, 200f),
-            19f, tinta, FontStyles.Normal,
-            TextAlignmentOptions.TopLeft);
+        Image reglaImg = regla.GetComponent<Image>();
+        reglaImg.color = Hex("D9453B");
+        reglaImg.raycastTarget = false;
+
+        ctrl.overlayAcento = reglaImg;
+
+        ctrl.overlaySubtitulo = Texto(bloque, "Subtitulo", "",
+            new Vector2(4f, -174f), new Vector2(1100f, 40f),
+            27f, tenue, FontStyles.Normal,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 2f);
+
+        ctrl.overlayEstadisticas = Texto(bloque, "Estadisticas", "",
+            new Vector2(4f, -252f), new Vector2(1150f, 250f),
+            25f, tenue, FontStyles.Normal,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 6f);
+
+        // Aire entre renglones. Es lo que separa una lista de datos de una
+        // ficha de resultados.
+        ctrl.overlayEstadisticas.lineSpacing = 34f;
 
         overlay.SetActive(false);
     }
-
-    // ---------- Piezas de UI ----------
 
     private static GameObject Panel(
         Transform padre,

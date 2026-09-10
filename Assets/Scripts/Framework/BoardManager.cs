@@ -41,6 +41,14 @@ public class BoardManager : MonoBehaviour
              "Si se deja vacío no se dibuja nada y todo lo demás sigue igual.")]
     public GameObject steamPrefab;
 
+    [Tooltip("Opcional. Destello verde al dejar a un civil en una salida.")]
+    public GameObject rescuePrefab;
+
+    [Tooltip("Segundos que se queda visible la víctima recién encontrada. " +
+             "0 la desactiva.")]
+    [Range(0f, 2f)]
+    public float segundosVictimaVisible = 0.9f;
+
     public Transform firefightersParent;
 
     public int rows = 6;
@@ -58,6 +66,16 @@ public class BoardManager : MonoBehaviour
 
     private readonly Dictionary<string, GameObject> fireObjects =
         new Dictionary<string, GameObject>();
+
+    // Quién venía cargando a alguien en el estado anterior. Es lo que
+    // permite detectar el momento exacto en que levantan o entregan a un
+    // civil sin pedirle nada nuevo al servidor.
+    private readonly Dictionary<int, bool> cargandoPrevio =
+        new Dictionary<int, bool>();
+
+    // -1 mientras no llega el primer estado, para no disparar feedback
+    // en la primera lectura.
+    private int rescatadasPrevias = -1;
 
     private readonly Dictionary<string, GameObject> smokeObjects =
         new Dictionary<string, GameObject>();
@@ -134,6 +152,8 @@ public class BoardManager : MonoBehaviour
         firefighterObjects.Clear();
         fireObjects.Clear();
         smokeObjects.Clear();
+        cargandoPrevio.Clear();
+        rescatadasPrevias = -1;
         poiObjects.Clear();
         poiPrefabUsed.Clear();
 
@@ -583,6 +603,153 @@ public class BoardManager : MonoBehaviour
         SyncPOIs(state.pois);
 
         MostrarApagados(fuegoAntes, humoAntes);
+        ActualizarCarga(state);
+    }
+
+    /// <summary>
+    /// Muestra quién carga a un civil y marca los dos momentos que el
+    /// espectador nunca alcanzaba a ver.
+    ///
+    /// Sin esto, una partida puede terminar con siete rescatadas y no
+    /// haberse visto una sola víctima: el bombero revela y carga en el
+    /// mismo turno, así que el marcador de víctima no llega a existir en
+    /// ningún estado.
+    ///
+    /// Nada de lo que hay aquí cambia datos. Si se vacían rescuePrefab y
+    /// victimPrefab en el inspector, deja de dibujarse y todo lo demás
+    /// sigue igual.
+    /// </summary>
+    private void ActualizarCarga(SimulationState state)
+    {
+        if (state.bomberos == null)
+        {
+            return;
+        }
+
+        // El total de rescatadas es del tablero, no de un bombero. Si en
+        // el mismo turno dos entregan civil, ambos se llevan el destello.
+        // Es una aproximación aceptable: pasa muy pocas veces y de todos
+        // modos hubo un rescate.
+        bool subioRescate = rescatadasPrevias >= 0
+                         && state.rescatadas > rescatadasPrevias;
+
+        foreach (FirefighterState bombero in state.bomberos)
+        {
+            if (!firefighterObjects.TryGetValue(bombero.id, out GameObject go))
+            {
+                continue;
+            }
+
+            if (go == null)
+            {
+                continue;
+            }
+
+            bool antes = cargandoPrevio.TryGetValue(bombero.id, out bool v)
+                         && v;
+
+            // Muñeco sobre el hombro mientras lleva a alguien. Es lo que
+            // más se nota de todo esto.
+            Transform marca = BuscarHijo(go.transform, "VictimaCargada");
+
+            if (marca != null && marca.gameObject.activeSelf != bombero.cargando)
+            {
+                marca.gameObject.SetActive(bombero.cargando);
+            }
+
+            bool primeraLectura = rescatadasPrevias < 0;
+
+            if (!primeraLectura && !antes && bombero.cargando)
+            {
+                MostrarVictimaEncontrada(bombero.fila, bombero.columna);
+            }
+            else if (!primeraLectura && antes && !bombero.cargando
+                     && subioRescate)
+            {
+                MostrarRescate(bombero.fila, bombero.columna);
+            }
+
+            cargandoPrevio[bombero.id] = bombero.cargando;
+        }
+
+        rescatadasPrevias = state.rescatadas;
+    }
+
+    /// <summary>
+    /// Dibuja durante un momento a la víctima que acaban de levantar, en
+    /// la celda donde ocurrió. Reutiliza victimPrefab, así que se ve
+    /// exactamente igual que una víctima revelada del tablero.
+    /// </summary>
+    private void MostrarVictimaEncontrada(int fila, int columna)
+    {
+        if (victimPrefab == null || segundosVictimaVisible <= 0f)
+        {
+            return;
+        }
+
+        GameObject go = Spawn(
+            victimPrefab,
+            CellToWorld(fila, columna, 0.15f),
+            Quaternion.identity,
+            transform,
+            $"VictimaEncontrada_{fila + 1}_{columna + 1}"
+        );
+
+        if (go == null)
+        {
+            return;
+        }
+
+        MarcadorTemporal temporal = go.AddComponent<MarcadorTemporal>();
+        temporal.duracion = segundosVictimaVisible;
+
+        // Red de seguridad por si alguien quita el componente.
+        Destroy(go, segundosVictimaVisible + 1.5f);
+    }
+
+    private void MostrarRescate(int fila, int columna)
+    {
+        if (rescuePrefab == null)
+        {
+            return;
+        }
+
+        GameObject go = Spawn(
+            rescuePrefab,
+            CellToWorld(fila, columna, 0.2f),
+            Quaternion.identity,
+            transform,
+            $"Rescate_{fila + 1}_{columna + 1}"
+        );
+
+        if (go != null)
+        {
+            Destroy(go, 3f);
+        }
+    }
+
+    /// <summary>
+    /// Busca un hijo por nombre a cualquier profundidad. Transform.Find
+    /// solo mira el primer nivel y el marcador cuelga de "Visual".
+    /// </summary>
+    private Transform BuscarHijo(Transform raiz, string nombre)
+    {
+        if (raiz.name == nombre)
+        {
+            return raiz;
+        }
+
+        for (int i = 0; i < raiz.childCount; i++)
+        {
+            Transform encontrado = BuscarHijo(raiz.GetChild(i), nombre);
+
+            if (encontrado != null)
+            {
+                return encontrado;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
