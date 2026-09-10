@@ -150,6 +150,7 @@ public static class FireRescuePolish
         CrearCarpetas();
         VestirBombero();
         AgregarVictimaCargada();
+        ConstruirPuerta();
         VestirVictimaYPoi();
         ConectarPrefabs();
 
@@ -263,6 +264,9 @@ public static class FireRescuePolish
         Mate("Reflejante", Hex("F0F3A8"), 0.55f, Hex("F0F3A8") * 0.35f);
         Mate("Madera", Hex("7A5334"), 0.15f);
         Mate("Tela", Hex("53606E"), 0.08f);
+        Mate("Follaje", Hex("4C7A46"), 0.10f);
+        Mate("Barro", Hex("A2603F"), 0.12f);
+        Mate("Libro", Hex("9C5B4A"), 0.08f);
 
         for (int i = 0; i < ColoresBombero.Length; i++)
         {
@@ -330,7 +334,10 @@ public static class FireRescuePolish
     {
         PintarPrefab("Cell", "Piso");
         PintarPrefab("Wall", "Pared");
-        PintarPrefab("Door", "Puerta");
+
+        // Door queda fuera a propósito: PintarPrefab pone el MISMO
+        // material en todos los renderers del prefab, y la puerta nueva
+        // tiene tres (hoja, marco y manija). ConstruirPuerta se encarga.
         PintarPrefab("Exit", "Salida");
 
         // Sin esto las 48 celdas muestran el mismo dibujo de duela y el
@@ -1120,11 +1127,13 @@ public static class FireRescuePolish
             copia.name = "VictimaCargada";
             copia.transform.SetParent(padre, false);
 
-            // Sobre el hombro, cruzada y un poco inclinada. Los números
-            // salen del modelo del bombero: 0.78 de alto.
-            copia.transform.localPosition = new Vector3(0f, 0.62f, -0.05f);
-            copia.transform.localRotation = Quaternion.Euler(0f, 90f, 14f);
-            copia.transform.localScale = Vector3.one * 0.55f;
+            // Sobre el hombro, no sobre la cabeza. La primera versión iba
+            // a 0.62 de alto y escala 0.55, que en el modelo de 0.78 la
+            // dejaba encima del casco y más grande que la cabeza: desde
+            // la cámara se leía como una cruz sobre el bombero.
+            copia.transform.localPosition = new Vector3(0.06f, 0.55f, 0.02f);
+            copia.transform.localRotation = Quaternion.Euler(0f, 78f, 22f);
+            copia.transform.localScale = Vector3.one * 0.34f;
 
             Material m = Cargar("Victima");
 
@@ -1158,6 +1167,183 @@ public static class FireRescuePolish
         {
             PrefabUtility.UnloadPrefabContents(raiz);
         }
+    }
+
+    /// <summary>
+    /// Rehace la puerta: marco, hoja con relieve y manija.
+    ///
+    /// Cómo estaba: Door.prefab era un solo cubo con la escala del objeto
+    /// raíz puesta en (0.65, 1, 0.1). Dos problemas. Uno, se veía como lo
+    /// que era, un bloque. Dos, esa escala no uniforme deforma a cualquier
+    /// hijo, así que no se le podía colgar nada encima sin que saliera
+    /// aplastado.
+    ///
+    /// Qué se hace: la raíz vuelve a escala 1 y la geometría se arma con
+    /// hijos a tamaño real. BoardManager solo le pone posición y rotación,
+    /// nunca escala, así que el cambio no le afecta.
+    ///
+    /// Estructura, y por qué esa y no otra:
+    ///
+    ///     Door
+    ///      +- Marco        jambas y dintel, fijos
+    ///      +- Bisagra      vacío en el canto, es el eje de giro
+    ///          +- Hoja     el tablero, desplazado media hoja
+    ///              +- entrepaños hundidos y manija
+    ///
+    /// La hoja cuelga de un vacío puesto en el canto porque una puerta
+    /// gira sobre sus bisagras, no sobre su centro. Si se rotara la hoja
+    /// directamente, atravesaría el marco.
+    ///
+    /// Todo queda como GameObjects normales dentro del prefab: se puede
+    /// mover, recolorear o cambiar de tamaño desde el inspector.
+    /// </summary>
+    private static void ConstruirPuerta()
+    {
+        string ruta = RutaPrefabsJuego + "/Door.prefab";
+
+        if (!File.Exists(ruta))
+        {
+            Debug.LogWarning("[Fire Rescue] No encontré " + ruta);
+            return;
+        }
+
+        GameObject raiz = PrefabUtility.LoadPrefabContents(ruta);
+
+        try
+        {
+            // Fuera el cubo original y cualquier armado anterior, para
+            // poder correr el paso las veces que haga falta.
+            MeshFilter mf = raiz.GetComponent<MeshFilter>();
+
+            if (mf != null)
+            {
+                Object.DestroyImmediate(raiz.GetComponent<MeshRenderer>());
+                Object.DestroyImmediate(mf);
+            }
+
+            for (int i = raiz.transform.childCount - 1; i >= 0; i--)
+            {
+                Object.DestroyImmediate(
+                    raiz.transform.GetChild(i).gameObject);
+            }
+
+            // La raíz vuelve a escala uniforme. Sin esto, todo hijo sale
+            // aplastado en Z y una manija redonda se vuelve una lenteja.
+            raiz.transform.localScale = Vector3.one;
+
+            Material madera = Cargar("Puerta");
+            Material marco = Cargar("Madera");
+            Material metal = Cargar("Metal");
+
+            // ---------- Marco ----------
+            GameObject gMarco = new GameObject("Marco");
+            gMarco.transform.SetParent(raiz.transform, false);
+
+            // La puerta está centrada en y = 0.5 dentro del hueco, así que
+            // aquí se trabaja de -0.5 a 0.5.
+            Bloque(gMarco.transform, "JambaIzq", marco,
+                   new Vector3(-0.445f, 0f, 0f),
+                   new Vector3(0.07f, 1.0f, 0.17f));
+
+            Bloque(gMarco.transform, "JambaDer", marco,
+                   new Vector3(0.445f, 0f, 0f),
+                   new Vector3(0.07f, 1.0f, 0.17f));
+
+            Bloque(gMarco.transform, "Dintel", marco,
+                   new Vector3(0f, 0.465f, 0f),
+                   new Vector3(0.96f, 0.07f, 0.17f));
+
+            // ---------- Bisagra y hoja ----------
+            GameObject gBisagra = new GameObject("Bisagra");
+            gBisagra.transform.SetParent(raiz.transform, false);
+            gBisagra.transform.localPosition =
+                new Vector3(-0.41f, 0f, 0f);
+
+            GameObject gHoja = new GameObject("Hoja");
+            gHoja.transform.SetParent(gBisagra.transform, false);
+
+            // Media hoja hacia adentro: así el canto queda justo sobre la
+            // bisagra y el giro se ve correcto.
+            float anchoHoja = 0.80f;
+            gHoja.transform.localPosition =
+                new Vector3(anchoHoja * 0.5f, 0f, 0f);
+
+            Bloque(gHoja.transform, "Tablero", madera,
+                   Vector3.zero,
+                   new Vector3(anchoHoja, 0.94f, 0.075f));
+
+            // Relieve: dos entrepaños hundidos. Se hacen con cajas un poco
+            // más delgadas y de color más oscuro; a esta distancia leen
+            // como hundido sin necesidad de otra malla.
+            for (int i = 0; i < 2; i++)
+            {
+                float y = i == 0 ? 0.20f : -0.22f;
+
+                Bloque(gHoja.transform, "Entrepano" + (i + 1), marco,
+                       new Vector3(0f, y, 0f),
+                       new Vector3(anchoHoja - 0.22f, 0.30f, 0.055f));
+            }
+
+            // Travesaño central, para que no queden dos huecos flotando.
+            Bloque(gHoja.transform, "Travesano", madera,
+                   new Vector3(0f, -0.01f, 0f),
+                   new Vector3(anchoHoja, 0.07f, 0.085f));
+
+            // ---------- Manija ----------
+            // Va del lado opuesto a las bisagras, que es donde va en una
+            // puerta real y además es lo que hace ver de qué lado abre.
+            Bloque(gHoja.transform, "Manija", metal,
+                   new Vector3(anchoHoja * 0.5f - 0.09f, -0.02f, 0.062f),
+                   new Vector3(0.10f, 0.035f, 0.035f));
+
+            Bloque(gHoja.transform, "ManijaAtras", metal,
+                   new Vector3(anchoHoja * 0.5f - 0.09f, -0.02f, -0.062f),
+                   new Vector3(0.10f, 0.035f, 0.035f));
+
+            // ---------- Componente ----------
+            PuertaVisual pv = raiz.GetComponent<PuertaVisual>();
+
+            if (pv == null)
+            {
+                pv = raiz.AddComponent<PuertaVisual>();
+            }
+
+            pv.bisagra = gBisagra.transform;
+            pv.hoja = gHoja;
+            pv.anguloAbierta = -102f;
+            pv.velocidad = 240f;
+
+            PrefabUtility.SaveAsPrefabAsset(raiz, ruta);
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(raiz);
+        }
+    }
+
+    /// <summary>Cubo con material, posición y tamaño en unidades reales.</summary>
+    private static GameObject Bloque(
+        Transform padre,
+        string nombre,
+        Material material,
+        Vector3 posicion,
+        Vector3 tamano
+    )
+    {
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go.name = nombre;
+        go.transform.SetParent(padre, false);
+        go.transform.localPosition = posicion;
+        go.transform.localScale = tamano;
+
+        Object.DestroyImmediate(go.GetComponent<Collider>());
+
+        if (material != null)
+        {
+            go.GetComponent<Renderer>().sharedMaterial = material;
+        }
+
+        return go;
     }
 
     /// <summary>
@@ -1832,9 +2018,12 @@ public static class FireRescuePolish
                 { "tela",   "Tela" },
                 { "sabana", "Victima" },
                 { "metal",  "Metal" },
-                { "libros", "Puerta" },
-                { "maceta", "Puerta" },
-                { "hoja",   "Salida" },
+                { "libros", "Libro" },
+                { "maceta", "Barro" },
+                // Antes esto decía "Salida": las hojas salían con el
+                // material emisivo de las salidas y una maceta se veía
+                // igual que una salida del edificio.
+                { "hoja",   "Follaje" },
                 { "carton", "Madera" },
                 { "cinta",  "Victima" },
             });
@@ -1892,6 +2081,7 @@ public static class FireRescuePolish
         Sliced("T_Capsula", 15f);
         Sliced("T_Vineta", 0f);
         Sliced("T_VinetaEsquina", 0f);
+        Sliced("T_VinetaIzq", 0f);
         Particula("T_Llama");
         Particula("T_Chispa");
         Particula("T_Bocanada");
@@ -2788,11 +2978,20 @@ public static class FireRescuePolish
         frt.offsetMin = Vector2.zero;
         frt.offsetMax = Vector2.zero;
 
-        // El relleno va sin sprite: con Image.Type.Filled el 9-slice no
-        // aplica, y a 5 píxeles de alto la punta cuadrada no se distingue.
         barra = relleno.GetComponent<Image>();
         barra.color = acento;
         barra.raycastTarget = false;
+
+        // El sprite NO es opcional aquí. Un Image con sprite en null se
+        // salta el tipo de dibujado (Image.OnPopulateMesh llama a la
+        // versión base y no entra al switch), así que fillAmount deja de
+        // tener efecto y la barra sale entera siempre. Pasó exactamente
+        // eso: con "0 / 4 perdidos" la barra ámbar se veía al 100%.
+        if (capsula != null)
+        {
+            barra.sprite = capsula;
+        }
+
         barra.type = Image.Type.Filled;
         barra.fillMethod = Image.FillMethod.Horizontal;
         barra.fillOrigin = (int)Image.OriginHorizontal.Left;
@@ -2804,26 +3003,29 @@ public static class FireRescuePolish
     /// <summary>
     /// Pantalla de fin de partida.
     ///
-    /// La versión anterior era una caja de 680x400 centrada con borde y un
-    /// filete de color al costado. Eso es una tarjeta, y una tarjeta
-    /// centrada sobre un juego se lee como panel de reporte.
+    /// Qué se quitó y por qué: no hay caja, ni borde, ni regla horizontal,
+    /// ni filete de color, ni antetítulo. Todos esos son recursos de
+    /// plantilla: separan bloques con un gráfico en vez de con el espacio,
+    /// y eso es lo que hace que una pantalla se lea como panel de datos.
     ///
-    /// Esta versión no tiene caja:
+    /// Lo que queda hace el trabajo:
     ///
-    /// - La escena sigue viéndose detrás, solo oscurecida.
-    /// - El bloque de texto va al tercio izquierdo, no centrado. Una
-    ///   composición descentrada se lee como cierre de película; una
-    ///   centrada y encajonada se lee como cuadro de diálogo.
-    /// - El título es enorme y el resto muy chico. Toda la jerarquía sale
-    ///   del tamaño, no de recuadros.
-    /// - El único adorno es una regla horizontal bajo el título que cambia
-    ///   de color según el resultado. Es información, no decoración: verde
-    ///   si se ganó, rojo si se perdió.
-    /// - Las estadísticas van en dos columnas dentro de un solo objeto de
-    ///   texto, alineadas con la etiqueta pos de TextMeshPro.
+    /// - Tipografía. El título mide 96 y el resto entre 20 y 62. Esa
+    ///   diferencia de escala ordena la lectura sola.
+    /// - Espacio. Subtítulo pegado al título porque van juntos; hueco
+    ///   grande antes de las cifras porque son otra cosa. Agrupar por
+    ///   cercanía es lo que sustituye a los divisores.
+    /// - Color. El título se pinta verde o rojo según el resultado. Es el
+    ///   único color de la pantalla y además informa.
+    /// - Un dato protagonista. Los civiles a salvo van en grande y solos;
+    ///   turnos, perdidos, daño y estrategia van en una línea corrida
+    ///   debajo. Una tabla de cinco renglones iguales se lee como reporte;
+    ///   un número grande con una frase debajo se lee como cierre.
+    /// - Fondo. Oscurecimiento plano suave más un degradado que baja por
+    ///   la izquierda, donde está el texto. El tablero se sigue viendo del
+    ///   lado derecho.
     ///
-    /// Todo sigue siendo Canvas y TMP normales, editables desde la
-    /// jerarquía.
+    /// Todo es Canvas y TMP normales, editables desde la jerarquía.
     /// </summary>
     private static void ConstruirOverlay(
         Transform padre,
@@ -2847,64 +3049,69 @@ public static class FireRescuePolish
         rt.offsetMin = Vector2.zero;
         rt.offsetMax = Vector2.zero;
 
-        // Oscurecimiento suave: se sigue viendo el tablero detrás, que es
-        // parte de lo que hace que se lea como final de partida y no como
-        // ventana emergente.
-        overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.74f);
+        // Base plana y suave: el tablero se sigue viendo entero.
+        overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.44f);
 
         ctrl.overlay = overlay.GetComponent<CanvasGroup>();
+
+        // Degradado por la izquierda. Es lo que da legibilidad al texto sin
+        // dibujar ningún recuadro detrás: donde hay letras el fondo baja a
+        // casi negro y hacia la derecha se abre y deja ver la escena.
+        GameObject sombra = new GameObject("SombraIzquierda",
+            typeof(RectTransform), typeof(Image));
+
+        sombra.transform.SetParent(overlay.transform, false);
+
+        RectTransform sombraRt = sombra.GetComponent<RectTransform>();
+        sombraRt.anchorMin = new Vector2(0f, 0f);
+        sombraRt.anchorMax = new Vector2(0f, 1f);
+        sombraRt.pivot = new Vector2(0f, 0.5f);
+        sombraRt.anchoredPosition = Vector2.zero;
+        sombraRt.sizeDelta = new Vector2(1180f, 0f);
+
+        Image sombraImg = sombra.GetComponent<Image>();
+        sombraImg.color = new Color(0f, 0f, 0f, 0.66f);
+        sombraImg.raycastTarget = false;
+
+        Sprite grad = Sprite("T_VinetaIzq");
+
+        if (grad != null)
+        {
+            sombraImg.sprite = grad;
+        }
 
         // Grupo sin fondo. HUDController lo usa para la animación de
         // entrada, así que tiene que existir aunque no se vea.
         RectTransform bloque = Grupo(overlay.transform, "Contenido",
-            new Vector2(0f, 0.5f), new Vector2(168f, 20f),
-            new Vector2(1300f, 520f));
+            new Vector2(0f, 0.5f), new Vector2(172f, 16f),
+            new Vector2(1240f, 480f));
 
         ctrl.overlayCaja = bloque;
 
-        Texto(bloque, "Antetitulo", "OPERACIÓN FINALIZADA",
-            new Vector2(4f, 0f), new Vector2(700f, 26f),
-            18f, tenue, FontStyles.Bold,
-            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 16f);
-
         ctrl.overlayTitulo = Texto(bloque, "Titulo", "MISIÓN",
-            new Vector2(0f, -32f), new Vector2(1250f, 118f),
-            92f, tinta, FontStyles.Bold,
+            new Vector2(0f, 0f), new Vector2(1200f, 124f),
+            96f, tinta, FontStyles.Bold,
             TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 3f);
 
-        // Regla horizontal bajo el título. Cambia de color con el
-        // resultado, así que informa en vez de decorar.
-        GameObject regla = new GameObject("Regla",
-            typeof(RectTransform), typeof(Image));
-
-        regla.transform.SetParent(bloque, false);
-
-        RectTransform reglaRt = regla.GetComponent<RectTransform>();
-        reglaRt.anchorMin = new Vector2(0f, 1f);
-        reglaRt.anchorMax = new Vector2(0f, 1f);
-        reglaRt.pivot = new Vector2(0f, 1f);
-        reglaRt.anchoredPosition = new Vector2(4f, -152f);
-        reglaRt.sizeDelta = new Vector2(360f, 3f);
-
-        Image reglaImg = regla.GetComponent<Image>();
-        reglaImg.color = Hex("D9453B");
-        reglaImg.raycastTarget = false;
-
-        ctrl.overlayAcento = reglaImg;
-
+        // Pegado al título a propósito: subtítulo y título son un solo
+        // bloque de lectura.
         ctrl.overlaySubtitulo = Texto(bloque, "Subtitulo", "",
-            new Vector2(4f, -174f), new Vector2(1100f, 40f),
+            new Vector2(4f, -122f), new Vector2(1100f, 42f),
             27f, tenue, FontStyles.Normal,
             TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 2f);
 
+        // Hueco grande antes de las cifras. Ese aire es el separador; no
+        // hace falta dibujar ninguna línea.
         ctrl.overlayEstadisticas = Texto(bloque, "Estadisticas", "",
-            new Vector2(4f, -252f), new Vector2(1150f, 250f),
-            25f, tenue, FontStyles.Normal,
-            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 6f);
+            new Vector2(4f, -212f), new Vector2(1180f, 250f),
+            20f, tenue, FontStyles.Normal,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 4f);
 
-        // Aire entre renglones. Es lo que separa una lista de datos de una
-        // ficha de resultados.
-        ctrl.overlayEstadisticas.lineSpacing = 34f;
+        ctrl.overlayEstadisticas.lineSpacing = 14f;
+
+        // overlayAcento se queda sin asignar: era el filete de color y ya
+        // no existe. HUDController comprueba null antes de usarlo, así que
+        // no pasa nada. El color del resultado ahora lo lleva el título.
 
         overlay.SetActive(false);
     }
@@ -3044,23 +3251,6 @@ public static class FireRescuePolish
         img.raycastTarget = false;
 
         return img;
-    }
-
-    private static void Linea(Transform padre, Vector2 posicion, float ancho)
-    {
-        GameObject go = new GameObject("Linea",
-            typeof(RectTransform), typeof(Image));
-
-        go.transform.SetParent(padre, false);
-
-        RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0f, 1f);
-        rt.anchorMax = new Vector2(0f, 1f);
-        rt.pivot = new Vector2(0f, 1f);
-        rt.anchoredPosition = posicion;
-        rt.sizeDelta = new Vector2(ancho, 1f);
-
-        go.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.12f);
     }
 
     private static Image Punto(

@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 999088219417681918}
   - component: {fileID: 7035315189501881593}
   - component: {fileID: -8463822833097644604}
+  - component: {fileID: 2370475083428718654}
   m_Layer: 0
   m_Name: Cell
   m_TagString: Untagged
@@ -68,7 +69,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: ac1797b7ea54bac4a846623a0d344082, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -127,3 +128,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CellView
   row: 0
   column: 0
+--- !u!114 &2370475083428718654
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4159359456167594480}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37b864edc4af1ce4a8611ef5d8ab0e56, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SuperficieVariada
+  desplazamiento: 1
+  soloEnU: 1
+  variacionBrillo: 0.11

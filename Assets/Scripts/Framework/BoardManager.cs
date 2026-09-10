@@ -77,6 +77,11 @@ public class BoardManager : MonoBehaviour
     // en la primera lectura.
     private int rescatadasPrevias = -1;
 
+    // Puertas por par de celdas. Antes no se guardaban porque se
+    // dibujaban una vez y nunca se volvían a tocar.
+    private readonly Dictionary<string, PuertaVisual> doorObjects =
+        new Dictionary<string, PuertaVisual>();
+
     private readonly Dictionary<string, GameObject> smokeObjects =
         new Dictionary<string, GameObject>();
 
@@ -154,6 +159,7 @@ public class BoardManager : MonoBehaviour
         smokeObjects.Clear();
         cargandoPrevio.Clear();
         rescatadasPrevias = -1;
+        doorObjects.Clear();
         poiObjects.Clear();
         poiPrefabUsed.Clear();
 
@@ -329,7 +335,7 @@ public class BoardManager : MonoBehaviour
                 rotation = Quaternion.Euler(0, 90, 0);
             }
 
-            Spawn(
+            GameObject doorObject = Spawn(
                 doorPrefab,
                 doorPosition + new Vector3(0, 0.5f, 0),
                 rotation,
@@ -337,6 +343,21 @@ public class BoardManager : MonoBehaviour
                 $"Door_{door.row1 + 1}_{door.column1 + 1}_" +
                 $"{door.row2 + 1}_{door.column2 + 1}"
             );
+
+            if (doorObject == null)
+            {
+                continue;
+            }
+
+            PuertaVisual visual = doorObject.GetComponent<PuertaVisual>();
+
+            if (visual != null)
+            {
+                doorObjects[DoorKey(
+                    door.row1, door.column1,
+                    door.row2, door.column2
+                )] = visual;
+            }
         }
     }
 
@@ -604,6 +625,67 @@ public class BoardManager : MonoBehaviour
 
         MostrarApagados(fuegoAntes, humoAntes);
         ActualizarCarga(state);
+        SyncPuertas(state.puertas);
+    }
+
+    /// <summary>
+    /// Abre, cierra y derriba puertas.
+    ///
+    /// El JSON traía `abierta` y `destruida` desde el principio, pero
+    /// nadie los leía: la puerta se dibujaba al construir el tablero y no
+    /// se volvía a tocar, así que abierta y cerrada se veían igual. En
+    /// Flash Point abrir una puerta cuesta un punto de acción, o sea que
+    /// es una decisión del agente que el espectador debería poder ver.
+    ///
+    /// Solo cambia lo que se dibuja. No manda nada al servidor.
+    /// </summary>
+    private void SyncPuertas(DoorState[] puertas)
+    {
+        if (puertas == null)
+        {
+            return;
+        }
+
+        foreach (DoorState puerta in puertas)
+        {
+            string clave = DoorKey(
+                puerta.fila1, puerta.columna1,
+                puerta.fila2, puerta.columna2
+            );
+
+            if (!doorObjects.TryGetValue(clave, out PuertaVisual visual))
+            {
+                continue;
+            }
+
+            if (visual == null)
+            {
+                continue;
+            }
+
+            visual.abierta = puerta.abierta;
+            visual.destruida = puerta.destruida;
+        }
+    }
+
+    /// <summary>
+    /// Clave de una puerta a partir de sus dos celdas.
+    ///
+    /// Las celdas se ordenan antes de juntarlas para que la misma puerta
+    /// dé la misma clave venga como (A,B) o como (B,A). El archivo del
+    /// tablero y el servidor no tienen por qué coincidir en el orden.
+    /// </summary>
+    private string DoorKey(int fila1, int columna1, int fila2, int columna2)
+    {
+        bool primeroVaAntes =
+            fila1 < fila2 || (fila1 == fila2 && columna1 <= columna2);
+
+        if (primeroVaAntes)
+        {
+            return $"{fila1}_{columna1}|{fila2}_{columna2}";
+        }
+
+        return $"{fila2}_{columna2}|{fila1}_{columna1}";
     }
 
     /// <summary>

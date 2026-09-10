@@ -436,23 +436,29 @@ public class HUDController : MonoBehaviour
         Escribir(overlayTitulo, titulo);
         Escribir(overlaySubtitulo, subtitulo);
 
-        // Dos columnas dentro de un solo objeto de texto. La etiqueta
-        // <pos=> de TextMeshPro corre el cursor a una posición fija en
-        // píxeles, así que las cifras quedan alineadas entre sí sin tener
-        // que crear cinco objetos separados.
+        // Un dato protagonista y una frase debajo, en vez de una tabla
+        // de cinco renglones iguales. Cinco pares etiqueta-valor del mismo
+        // tamaño se leen como reporte; un número grande solo y el resto
+        // corrido se lee como cierre de partida.
         //
-        // El objeto de texto está en gris y solo el dato va en blanco: es
-        // lo que hace que se lea la cifra y no la etiqueta.
-        string a = "<pos=420><color=#F0F3F6><b>";
-        string b = "</b></color>";
+        // Los civiles a salvo son el dato que cuenta la historia: sirve
+        // tanto si se ganó (7 de 7) como si se perdió (3 de 7).
+        //
+        // Va todo en un solo objeto de texto con etiquetas de tamaño. El
+        // renglón vacío pequeño de en medio es el que abre el hueco entre
+        // la cifra grande y la línea de detalle, sin dibujar nada.
+        string claro = "<color=#F0F3F6>";
 
         Escribir(
             overlayEstadisticas,
-            $"TURNOS{a}{client.turno}{b}\n" +
-            $"CIVILES RESCATADOS{a}{client.rescatadas} / {objetivoRescate}{b}\n" +
-            $"CIVILES PERDIDOS{a}{client.perdidas} / {limitePerdidas}{b}\n" +
-            $"DAÑO ESTRUCTURAL{a}{client.danio} / {limiteDanio}{b}\n" +
-            $"ESTRATEGIA{a}{NombreEstrategia(client.estrategiaActiva)}{b}"
+            $"<size=62>{claro}<b>{client.rescatadas} de " +
+            $"{objetivoRescate}</b></color></size>\n" +
+            $"civiles a salvo\n" +
+            $"<size=14> </size>\n" +
+            $"{claro}{client.turno}</color> turnos     " +
+            $"{claro}{client.perdidas} de {limitePerdidas}</color> perdidos     " +
+            $"{claro}{client.danio} de {limiteDanio}</color> de daño estructural\n" +
+            $"estrategia {claro}{NombreEstrategia(client.estrategiaActiva)}</color>"
         );
 
         if (overlayTitulo != null)
@@ -463,6 +469,28 @@ public class HUDController : MonoBehaviour
         if (overlayAcento != null)
         {
             overlayAcento.color = acento;
+        }
+
+        // Apagar el HUD de juego. Sin esto, el estado de la cabecera
+        // muestra "MISIÓN CUMPLIDA" al mismo tiempo que el título del
+        // cierre dice lo mismo, y el texto repetido se ve como error.
+        //
+        // Se recorren los hermanos en vez de guardar referencias para no
+        // agregar campos que habría que volver a asignar a mano si alguien
+        // reconstruye el HUD.
+        Transform lienzo = overlay.transform.parent;
+
+        if (lienzo != null)
+        {
+            for (int i = 0; i < lienzo.childCount; i++)
+            {
+                Transform hijo = lienzo.GetChild(i);
+
+                if (hijo != overlay.transform)
+                {
+                    hijo.gameObject.SetActive(false);
+                }
+            }
         }
 
         overlay.gameObject.SetActive(true);
