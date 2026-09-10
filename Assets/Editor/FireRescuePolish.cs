@@ -137,6 +137,7 @@ public static class FireRescuePolish
         CrearTexturaParticula();
         ConstruirFuego();
         ConstruirHumo();
+        ConstruirVapor();
 
         AssetDatabase.SaveAssets();
         Debug.Log("[Fire Rescue] Fuego y humo construidos.");
@@ -554,7 +555,8 @@ public static class FireRescuePolish
     private static Material MaterialParticula(
         string nombre,
         string shaderPreferido,
-        Color color
+        Color color,
+        string textura = "T_Puff"
     )
     {
         string ruta = RutaMateriales + "/M_" + nombre + ".mat";
@@ -577,7 +579,7 @@ public static class FireRescuePolish
         }
 
         Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(
-            RutaTexturas + "/T_Puff.png"
+            RutaTexturas + "/" + textura + ".png"
         );
 
         if (tex != null)
@@ -596,227 +598,409 @@ public static class FireRescuePolish
     // FUEGO
     // =====================================================
 
+    /// <summary>
+    /// Arma la llama por capas.
+    ///
+    /// Qué estaba mal antes: una esfera emisiva de 0.34 en el centro con
+    /// partículas redondas alrededor. Una esfera se lee como bola de luz,
+    /// y un sprite circular se lee como humo iluminado. Ninguna de las dos
+    /// cosas se parece a una llama.
+    ///
+    /// Qué se hace ahora:
+    ///
+    /// - La esfera desaparece. La llama la forman solo partículas.
+    /// - El sprite T_Llama tiene silueta de llama: base redondeada, panza
+    ///   al 20% de la altura, punta afilada y núcleo caliente sobre el eje.
+    /// - Tres capas encimadas: base ancha y roja pegada al suelo, cuerpo
+    ///   naranja subiendo, y punta amarilla pequeña y rápida. Es lo que
+    ///   pedía la referencia: base, cuerpo y punta.
+    /// - Más chispas sueltas para romper la regularidad.
+    /// - Todas usan VerticalBillboard, no Billboard. Con la cámara a 62
+    ///   grados, un billboard normal acostaría la llama hacia atrás; el
+    ///   vertical la mantiene de pie y solo gira sobre su eje Y.
+    /// - Material aditivo: donde se encima una capa con otra, el color se
+    ///   suma y aparece solo un núcleo blanco-amarillo, sin tener que
+    ///   dibujarlo.
+    ///
+    /// No se agregan luces reales. Con hasta veinte fuegos en el tablero y
+    /// forward rendering, una Light por fuego se come el presupuesto de
+    /// luces por píxel y el rendimiento cuenta en la rúbrica.
+    /// </summary>
     private static void ConstruirFuego()
     {
         Material matLlama = MaterialParticula(
             "PartFuego",
             "Mobile/Particles/Additive",
-            Color.white
+            Color.white,
+            "T_Llama"
         );
 
         Material matChispa = MaterialParticula(
             "PartChispa",
             "Mobile/Particles/Additive",
-            Color.white
+            Color.white,
+            "T_Chispa"
         );
 
         GameObject raiz = new GameObject("FireVisual");
 
-        // Núcleo sólido y emissive: le da cuerpo a la llama y se ve
-        // desde lejos aunque las partículas sean sutiles.
-        GameObject nucleo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        nucleo.name = "Core";
-        nucleo.transform.SetParent(raiz.transform, false);
-        nucleo.transform.localScale = new Vector3(0.34f, 0.26f, 0.34f);
-        nucleo.transform.localPosition = new Vector3(0f, -0.06f, 0f);
-        Object.DestroyImmediate(nucleo.GetComponent<Collider>());
-        nucleo.GetComponent<Renderer>().sharedMaterial = Cargar("NucleoFuego");
+        // Base: ancha, lenta, roja, pegada al suelo. Es la que le da
+        // asiento a la llama para que no parezca flotar.
+        CapaLlama(
+            raiz.transform, "LlamaBase", matLlama,
+            alturaLocal: -0.02f,
+            emision: 9f,
+            maximo: 16,
+            vidaMin: 0.34f, vidaMax: 0.58f,
+            velMin: 0.22f, velMax: 0.46f,
+            tamMin: 0.34f, tamMax: 0.52f,
+            radio: 0.19f, angulo: 9f,
+            colorA: Hex("FF6A18"), colorB: Hex("D6300A"),
+            colorMedio: Hex("FF4E10"), colorFinal: Hex("8E1C04"),
+            crecer: 0.85f, encoger: 0.42f,
+            ruidoFuerza: 0.18f, ruidoFrec: 1.1f,
+            orden: -3f
+        );
 
-        PulseVisual latido = nucleo.AddComponent<PulseVisual>();
-        latido.amplitud = 0.13f;
-        latido.velocidad = 3.4f;
-        latido.pulsarEmision = true;
-        latido.emisionMinima = 1.2f;
-        latido.emisionMaxima = 2.8f;
+        // Cuerpo: la masa principal de la llama.
+        CapaLlama(
+            raiz.transform, "LlamaCuerpo", matLlama,
+            alturaLocal: 0.06f,
+            emision: 13f,
+            maximo: 22,
+            vidaMin: 0.40f, vidaMax: 0.72f,
+            velMin: 0.60f, velMax: 1.05f,
+            tamMin: 0.24f, tamMax: 0.40f,
+            radio: 0.13f, angulo: 12f,
+            colorA: Hex("FFA023"), colorB: Hex("FF5A10"),
+            colorMedio: Hex("FF7A1A"), colorFinal: Hex("B32806"),
+            crecer: 1f, encoger: 0.22f,
+            ruidoFuerza: 0.40f, ruidoFrec: 1.7f,
+            orden: -2f
+        );
 
-        // Llamas
-        GameObject llamas = new GameObject("Flames");
-        llamas.transform.SetParent(raiz.transform, false);
+        // Punta: chica, rápida y clara. Sube más y se apaga antes.
+        CapaLlama(
+            raiz.transform, "LlamaPunta", matLlama,
+            alturaLocal: 0.16f,
+            emision: 10f,
+            maximo: 16,
+            vidaMin: 0.26f, vidaMax: 0.46f,
+            velMin: 1.05f, velMax: 1.75f,
+            tamMin: 0.12f, tamMax: 0.22f,
+            radio: 0.07f, angulo: 17f,
+            colorA: Hex("FFEEA8"), colorB: Hex("FFC24A"),
+            colorMedio: Hex("FFCF63"), colorFinal: Hex("FF7A1A"),
+            crecer: 1f, encoger: 0.10f,
+            ruidoFuerza: 0.62f, ruidoFrec: 2.4f,
+            orden: -1f
+        );
 
-        ParticleSystem ps = llamas.AddComponent<ParticleSystem>();
+        // Chispas
+        GameObject chispas = new GameObject("Chispas");
+        chispas.transform.SetParent(raiz.transform, false);
+
+        ParticleSystem pc = chispas.AddComponent<ParticleSystem>();
+
+        var mc = pc.main;
+        mc.duration = 1f;
+        mc.loop = true;
+        mc.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
+        mc.startSpeed = new ParticleSystem.MinMaxCurve(0.9f, 2.1f);
+        mc.startSize = new ParticleSystem.MinMaxCurve(0.030f, 0.075f);
+        mc.simulationSpace = ParticleSystemSimulationSpace.World;
+        mc.maxParticles = 18;
+        mc.gravityModifier = -0.06f;
+        mc.startColor = new ParticleSystem.MinMaxGradient(
+            Hex("FFE9A0"), Hex("FF9A2E"));
+
+        var ec = pc.emission;
+        ec.rateOverTime = 5f;
+
+        var sc = pc.shape;
+        sc.shapeType = ParticleSystemShapeType.Cone;
+        sc.angle = 26f;
+        sc.radius = 0.14f;
+        sc.rotation = new Vector3(-90f, 0f, 0f);
+
+        var cvc = pc.colorOverLifetime;
+        cvc.enabled = true;
+        cvc.color = new ParticleSystem.MinMaxGradient(
+            Degradado(
+                new[] { Hex("FFF0BE"), Hex("FF7A22") },
+                new[] { 0f, 1f },
+                new[] { 0f, 1f, 0f },
+                new[] { 0f, 0.2f, 1f }
+            )
+        );
+
+        var nc = pc.noise;
+        nc.enabled = true;
+        nc.strength = 0.55f;
+        nc.frequency = 2.6f;
+        nc.scrollSpeed = 1.4f;
+
+        var rc = pc.GetComponent<ParticleSystemRenderer>();
+        rc.sharedMaterial = matChispa;
+        rc.renderMode = ParticleSystemRenderMode.Billboard;
+        rc.sortingFudge = -4f;
+
+        GuardarComoPrefab(raiz, RutaPrefabs + "/FireVisual.prefab");
+    }
+
+    /// <summary>
+    /// Una capa de llama. Las tres capas del fuego son iguales salvo por
+    /// los números, así que se arman con la misma función.
+    /// </summary>
+    private static void CapaLlama(
+        Transform padre,
+        string nombre,
+        Material material,
+        float alturaLocal,
+        float emision,
+        int maximo,
+        float vidaMin, float vidaMax,
+        float velMin, float velMax,
+        float tamMin, float tamMax,
+        float radio, float angulo,
+        Color colorA, Color colorB,
+        Color colorMedio, Color colorFinal,
+        float crecer, float encoger,
+        float ruidoFuerza, float ruidoFrec,
+        float orden
+    )
+    {
+        GameObject go = new GameObject(nombre);
+        go.transform.SetParent(padre, false);
+        go.transform.localPosition = new Vector3(0f, alturaLocal, 0f);
+
+        ParticleSystem ps = go.AddComponent<ParticleSystem>();
+
         var main = ps.main;
         main.duration = 1f;
         main.loop = true;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.35f, 0.7f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.55f, 1.15f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.20f, 0.42f);
-        main.startRotation = new ParticleSystem.MinMaxCurve(0f, 6.28f);
-        main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.maxParticles = 40;
-        main.startColor = new ParticleSystem.MinMaxGradient(
-            Hex("FFD24A"),
-            Hex("FF4A15")
-        );
+        main.startLifetime = new ParticleSystem.MinMaxCurve(vidaMin, vidaMax);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(velMin, velMax);
+        main.startSize = new ParticleSystem.MinMaxCurve(tamMin, tamMax);
 
-        var emision = ps.emission;
-        emision.rateOverTime = 22f;
+        // Giro chico a propósito. Con giro libre las llamas apuntarían a
+        // cualquier lado; con ocho grados solo se despeinan un poco.
+        main.startRotation = new ParticleSystem.MinMaxCurve(-0.14f, 0.14f);
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = maximo;
+        main.startColor = new ParticleSystem.MinMaxGradient(colorA, colorB);
+
+        var em = ps.emission;
+        em.rateOverTime = emision;
 
         var forma = ps.shape;
         forma.shapeType = ParticleSystemShapeType.Cone;
-        forma.angle = 14f;
-        forma.radius = 0.20f;
+        forma.angle = angulo;
+        forma.radius = radio;
         forma.rotation = new Vector3(-90f, 0f, 0f);
 
         var colorVida = ps.colorOverLifetime;
         colorVida.enabled = true;
         colorVida.color = new ParticleSystem.MinMaxGradient(
             Degradado(
-                new[] { Hex("FFE08A"), Hex("FF7A22"), Hex("C22A08") },
+                new[] { colorA, colorMedio, colorFinal },
                 new[] { 0f, 0.45f, 1f },
-                new[] { 0f, 1f, 0.9f, 0f },
-                new[] { 0f, 0.15f, 0.6f, 1f }
+                new[] { 0f, 1f, 0.85f, 0f },
+                new[] { 0f, 0.12f, 0.55f, 1f }
             )
         );
 
+        // La llama nace chica, se abre y se afila al subir.
         var tamVida = ps.sizeOverLifetime;
         tamVida.enabled = true;
         tamVida.size = new ParticleSystem.MinMaxCurve(
             1f,
             new AnimationCurve(
-                new Keyframe(0f, 0.35f),
-                new Keyframe(0.25f, 1f),
-                new Keyframe(1f, 0.15f)
+                new Keyframe(0f, 0.55f),
+                new Keyframe(0.22f, crecer),
+                new Keyframe(1f, encoger)
             )
         );
 
-        // Ruido: es lo que hace que la llama tiemble en vez de subir recta.
+        // Sin ruido la llama sube recta como una vela y se nota falsa.
         var ruido = ps.noise;
         ruido.enabled = true;
-        ruido.strength = 0.45f;
-        ruido.frequency = 1.6f;
-        ruido.scrollSpeed = 1.1f;
+        ruido.strength = ruidoFuerza;
+        ruido.frequency = ruidoFrec;
+        ruido.scrollSpeed = 1.2f;
 
         var render = ps.GetComponent<ParticleSystemRenderer>();
-        render.sharedMaterial = matLlama;
-        render.renderMode = ParticleSystemRenderMode.Billboard;
-        render.sortingFudge = -2f;
+        render.sharedMaterial = material;
 
-        // Chispas
-        GameObject chispas = new GameObject("Sparks");
-        chispas.transform.SetParent(raiz.transform, false);
-
-        ParticleSystem sp = chispas.AddComponent<ParticleSystem>();
-        var spMain = sp.main;
-        spMain.duration = 1f;
-        spMain.loop = true;
-        spMain.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
-        spMain.startSpeed = new ParticleSystem.MinMaxCurve(0.8f, 1.9f);
-        spMain.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.07f);
-        spMain.simulationSpace = ParticleSystemSimulationSpace.World;
-        spMain.maxParticles = 18;
-        spMain.gravityModifier = -0.06f;
-        spMain.startColor = new ParticleSystem.MinMaxGradient(Hex("FFD98A"));
-
-        var spEm = sp.emission;
-        spEm.rateOverTime = 7f;
-
-        var spForma = sp.shape;
-        spForma.shapeType = ParticleSystemShapeType.Cone;
-        spForma.angle = 26f;
-        spForma.radius = 0.16f;
-        spForma.rotation = new Vector3(-90f, 0f, 0f);
-
-        var spColor = sp.colorOverLifetime;
-        spColor.enabled = true;
-        spColor.color = new ParticleSystem.MinMaxGradient(
-            Degradado(
-                new[] { Hex("FFF0B0"), Hex("FF7A22") },
-                new[] { 0f, 1f },
-                new[] { 1f, 1f, 0f },
-                new[] { 0f, 0.55f, 1f }
-            )
-        );
-
-        var spRender = sp.GetComponent<ParticleSystemRenderer>();
-        spRender.sharedMaterial = matChispa;
-        spRender.renderMode = ParticleSystemRenderMode.Billboard;
-
-        GuardarComoPrefab(raiz, RutaPrefabs + "/FireVisual.prefab");
-
-        // Se mete dentro del prefab Fire que BoardManager ya instancia,
-        // sin borrar su raíz ni sus componentes.
-        InyectarVisual("Fire", RutaPrefabs + "/FireVisual.prefab", true);
+        // VerticalBillboard y no Billboard: mantiene la llama de pie con
+        // la cámara inclinada. Es el detalle que más se nota.
+        render.renderMode = ParticleSystemRenderMode.VerticalBillboard;
+        render.sortingFudge = orden;
     }
 
     // =====================================================
     // HUMO
     // =====================================================
 
+    /// <summary>
+    /// Humo. Tiene que distinguirse del fuego de un vistazo.
+    ///
+    /// Las cuatro diferencias que lo separan de la llama:
+    /// crece en vez de afilarse, sube lento en vez de rápido, no tiene
+    /// núcleo brillante porque el material es transparente y no aditivo,
+    /// y gira sobre sí mismo.
+    /// </summary>
     private static void ConstruirHumo()
     {
         Material matHumo = MaterialParticula(
             "PartHumo",
             "Mobile/Particles/Alpha Blended",
-            Color.white
+            Color.white,
+            "T_Bocanada"
         );
 
         GameObject raiz = new GameObject("SmokeVisual");
 
         ParticleSystem ps = raiz.AddComponent<ParticleSystem>();
+
         var main = ps.main;
         main.duration = 2f;
         main.loop = true;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(1.8f, 3.2f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.16f, 0.36f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 0.85f);
+        main.startLifetime = new ParticleSystem.MinMaxCurve(2.2f, 3.8f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.12f, 0.30f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.40f, 0.72f);
         main.startRotation = new ParticleSystem.MinMaxCurve(0f, 6.28f);
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.maxParticles = 26;
+        main.maxParticles = 24;
         main.startColor = new ParticleSystem.MinMaxGradient(
-            Hex("8B939B"),
-            Hex("5E666E")
-        );
+            Hex("98A0A8"), Hex("646C74"));
 
         var emision = ps.emission;
-        emision.rateOverTime = 6f;
+        emision.rateOverTime = 5.5f;
 
         var forma = ps.shape;
         forma.shapeType = ParticleSystemShapeType.Cone;
-        forma.angle = 20f;
-        forma.radius = 0.26f;
+        forma.angle = 22f;
+        forma.radius = 0.24f;
         forma.rotation = new Vector3(-90f, 0f, 0f);
 
         var colorVida = ps.colorOverLifetime;
         colorVida.enabled = true;
         colorVida.color = new ParticleSystem.MinMaxGradient(
             Degradado(
-                new[] { Hex("9AA2AA"), Hex("4E555C") },
+                new[] { Hex("A6AEB6"), Hex("545B62") },
                 new[] { 0f, 1f },
-                new[] { 0f, 0.42f, 0f },
-                new[] { 0f, 0.3f, 1f }
+                new[] { 0f, 0.38f, 0f },
+                new[] { 0f, 0.28f, 1f }
             )
         );
 
-        // El humo crece al subir: es lo que lo distingue del fuego, que
-        // se encoge y desaparece rápido.
+        // Crece al subir. Es lo contrario del fuego, que se afila.
         var tamVida = ps.sizeOverLifetime;
         tamVida.enabled = true;
         tamVida.size = new ParticleSystem.MinMaxCurve(
             1f,
             new AnimationCurve(
-                new Keyframe(0f, 0.5f),
-                new Keyframe(1f, 1.5f)
+                new Keyframe(0f, 0.45f),
+                new Keyframe(1f, 1.75f)
             )
         );
 
         var rotVida = ps.rotationOverLifetime;
         rotVida.enabled = true;
-        rotVida.z = new ParticleSystem.MinMaxCurve(-0.5f, 0.5f);
+        rotVida.z = new ParticleSystem.MinMaxCurve(-0.45f, 0.45f);
 
         var ruido = ps.noise;
         ruido.enabled = true;
-        ruido.strength = 0.22f;
-        ruido.frequency = 0.5f;
-        ruido.scrollSpeed = 0.25f;
+        ruido.strength = 0.26f;
+        ruido.frequency = 0.45f;
+        ruido.scrollSpeed = 0.22f;
 
         var render = ps.GetComponent<ParticleSystemRenderer>();
         render.sharedMaterial = matHumo;
         render.renderMode = ParticleSystemRenderMode.Billboard;
-        render.sortingFudge = 2f;
+        render.sortingFudge = 3f;
 
         GuardarComoPrefab(raiz, RutaPrefabs + "/SmokeVisual.prefab");
 
         CrearPrefabHumoDeJuego();
+    }
+
+    /// <summary>
+    /// Ráfaga de vapor de un solo disparo, para cuando se apaga fuego.
+    ///
+    /// Se destruye sola: loop apagado y Stop Action en Destroy. BoardManager
+    /// la instancia y se olvida de ella, así que no hay que llevar registro
+    /// de nada ni limpiar al terminar la partida.
+    /// </summary>
+    private static void ConstruirVapor()
+    {
+        Material matVapor = MaterialParticula(
+            "PartVapor",
+            "Mobile/Particles/Alpha Blended",
+            Color.white,
+            "T_Bocanada"
+        );
+
+        GameObject raiz = new GameObject("SteamVisual");
+
+        ParticleSystem ps = raiz.AddComponent<ParticleSystem>();
+
+        var main = ps.main;
+        main.duration = 0.5f;
+        main.loop = false;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.45f, 0.85f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.55f, 1.30f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.16f, 0.32f);
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, 6.28f);
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.maxParticles = 20;
+        main.gravityModifier = -0.10f;
+        main.stopAction = ParticleSystemStopAction.Destroy;
+        main.startColor = new ParticleSystem.MinMaxGradient(
+            Hex("EAF0F4"), Hex("BCC6CE"));
+
+        // Un solo estallido al nacer, no emisión continua.
+        var emision = ps.emission;
+        emision.rateOverTime = 0f;
+        emision.SetBursts(new[]
+        {
+            new ParticleSystem.Burst(0f, (short)12)
+        });
+
+        var forma = ps.shape;
+        forma.shapeType = ParticleSystemShapeType.Cone;
+        forma.angle = 38f;
+        forma.radius = 0.14f;
+        forma.rotation = new Vector3(-90f, 0f, 0f);
+
+        var colorVida = ps.colorOverLifetime;
+        colorVida.enabled = true;
+        colorVida.color = new ParticleSystem.MinMaxGradient(
+            Degradado(
+                new[] { Hex("FFFFFF"), Hex("C4CED6") },
+                new[] { 0f, 1f },
+                new[] { 0f, 0.75f, 0f },
+                new[] { 0f, 0.15f, 1f }
+            )
+        );
+
+        var tamVida = ps.sizeOverLifetime;
+        tamVida.enabled = true;
+        tamVida.size = new ParticleSystem.MinMaxCurve(
+            1f,
+            new AnimationCurve(
+                new Keyframe(0f, 0.6f),
+                new Keyframe(1f, 2.1f)
+            )
+        );
+
+        var render = ps.GetComponent<ParticleSystemRenderer>();
+        render.sharedMaterial = matVapor;
+        render.renderMode = ParticleSystemRenderMode.Billboard;
+        render.sortingFudge = -6f;
+
+        GuardarComoPrefab(raiz, RutaPrefabsJuego + "/Steam.prefab");
     }
 
     /// <summary>
@@ -890,14 +1074,67 @@ public static class FireRescuePolish
         Asignar(so, "smokePrefab", RutaPrefabsJuego + "/Smoke.prefab");
         Asignar(so, "victimPrefab", RutaPrefabsJuego + "/Victim.prefab");
         Asignar(so, "falseAlarmPrefab", RutaPrefabsJuego + "/FalseAlarm.prefab");
+        Asignar(so, "steamPrefab", RutaPrefabsJuego + "/Steam.prefab");
 
         so.ApplyModifiedProperties();
 
         EditorUtility.SetDirty(bm);
 
+        AjustarRitmo();
+
         EditorSceneManager.MarkSceneDirty(
             EditorSceneManager.GetActiveScene()
         );
+    }
+
+    /// <summary>
+    /// Baja el ritmo de la demo a 1.2 segundos por turno.
+    ///
+    /// Qué es y qué no es: secondsBetweenSteps es la espera de Unity antes
+    /// de pedir el siguiente POST /step. No entra en ninguna decisión, no
+    /// toca ningún generador y no cambia ningún resultado. El servidor
+    /// calcula el turno igual de rápido y devuelve el mismo estado. Es el
+    /// mismo patrón que FuncAnimation en los notebooks de la clase: la
+    /// velocidad de despliegue va aparte del modelo.
+    ///
+    /// A 0.5 segundos una partida de 40 turnos dura 20 segundos y no se
+    /// alcanza a ver nada. A 1.2 dura unos 48, que es la duración correcta
+    /// para grabar. Se cambia desde el inspector cuando quieras.
+    ///
+    /// Solo se toca si sigue en el valor viejo, para no pisar un ajuste
+    /// que hayas hecho a mano.
+    /// </summary>
+    private static void AjustarRitmo()
+    {
+        SimulationClient cliente =
+            Object.FindAnyObjectByType<SimulationClient>();
+
+        if (cliente == null)
+        {
+            return;
+        }
+
+        if (Mathf.Abs(cliente.secondsBetweenSteps - 0.5f) > 0.001f)
+        {
+            return;
+        }
+
+        SerializedObject so = new SerializedObject(cliente);
+
+        SerializedProperty p = so.FindProperty("secondsBetweenSteps");
+
+        if (p != null)
+        {
+            p.floatValue = 1.2f;
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(cliente);
+
+            Debug.Log(
+                "[Fire Rescue] Ritmo de la demo: 0.5 -> 1.2 s por turno. " +
+                "Es solo presentación, no cambia ningún resultado. " +
+                "Se ajusta en Systems > Simulation Client."
+            );
+        }
     }
 
     private static void Asignar(
@@ -1496,6 +1733,11 @@ public static class FireRescuePolish
         Sliced("T_Marco", 22f);
         Sliced("T_Capsula", 15f);
         Sliced("T_Vineta", 0f);
+        Sliced("T_VinetaEsquina", 0f);
+        Particula("T_Llama");
+        Particula("T_Chispa");
+        Particula("T_Bocanada");
+        Particula("T_Puff");
 
         string[] iconos =
         {
@@ -1521,6 +1763,40 @@ public static class FireRescuePolish
         {
             generar();
         }
+    }
+
+    /// <summary>
+    /// Importa una textura de partícula.
+    ///
+    /// alphaIsTransparency es lo importante: sin eso, Unity deja basura de
+    /// color en los píxeles totalmente transparentes y al mezclar aparece
+    /// un halo oscuro alrededor de cada partícula.
+    /// </summary>
+    private static void Particula(string nombre)
+    {
+        string ruta = RutaTexturas + "/" + nombre + ".png";
+
+        if (!System.IO.File.Exists(ruta))
+        {
+            return;
+        }
+
+        AssetDatabase.ImportAsset(ruta);
+
+        TextureImporter imp = AssetImporter.GetAtPath(ruta) as TextureImporter;
+
+        if (imp == null)
+        {
+            return;
+        }
+
+        imp.textureType = TextureImporterType.Default;
+        imp.alphaIsTransparency = true;
+        imp.sRGBTexture = true;
+        imp.wrapMode = TextureWrapMode.Clamp;
+        imp.filterMode = FilterMode.Bilinear;
+        imp.mipmapEnabled = true;
+        imp.SaveAndReimport();
     }
 
     private static void Sliced(string nombre, float borde)
@@ -1935,33 +2211,40 @@ public static class FireRescuePolish
     // HUD
     // =====================================================
 
+    // Medidas del bloque de objetivos. Están arriba y no dentro de las
+    // funciones para poder ajustar el HUD entero cambiando dos números.
+    private const float AnchoFila = 420f;
+    private const float AltoFila = 64f;
+    private const float AltoFilaDanio = 84f;
+    private const float SeparacionFila = 28f;
+
     /// <summary>
     /// Construye el HUD de juego.
     ///
-    /// Reglas de la composicion, para que se pueda repetir si hay que
-    /// mover algo:
+    /// Criterios de la composición, para poder repetirla si hay que mover
+    /// algo:
     ///
-    /// 1. Nada de tarjetas. En vez de recuadros hay dos degradados
-    ///    pegados al borde superior e inferior. El texto se lee sobre
-    ///    cualquier fondo y la pantalla no parece un tablero de datos.
+    /// 1. Nada de tarjetas ni recuadros. El fondo son dos degradados
+    ///    pegados a los bordes: uno arriba y una viñeta en la esquina de
+    ///    abajo a la izquierda. Dan legibilidad sin dibujar cajas.
     ///
-    /// 2. Los grupos van anclados a las esquinas y no comparten espacio
-    ///    horizontal. Identidad a la izquierda, turno a la derecha,
-    ///    objetivos abajo. En 1920 de ancho quedan mas de mil pixeles
-    ///    entre el grupo izquierdo y el derecho, asi que un texto largo
-    ///    ya no puede encimarse con otro: antes ambos vivian dentro del
-    ///    mismo panel de 430 y por eso se traslapaban.
+    /// 2. Los tres bloques van anclados a esquinas distintas y no comparten
+    ///    espacio horizontal. Identidad arriba a la izquierda, turno arriba
+    ///    a la derecha, objetivos abajo a la izquierda. En 1920 quedan más
+    ///    de mil píxeles entre el bloque izquierdo y el derecho, así que un
+    ///    texto largo no se puede encimar con otro.
     ///
-    /// 3. Jerarquia por tamano y peso, no por cajas. Un solo numero
-    ///    grande (el turno), etiquetas chicas muy espaciadas y barras
-    ///    de 4 pixeles.
+    /// 3. Jerarquía por tamaño. Un número grande (el turno), etiquetas
+    ///    chicas muy espaciadas y barras de 5 píxeles.
     ///
-    /// 4. Un acento de color por fila y nada mas. El rojo del titulo,
-    ///    el verde de rescatadas, el ambar de perdidas y el rojo del
-    ///    daño. El resto es gris.
+    /// 4. Un acento por bloque y nada más. Naranja en la identidad, verde
+    ///    en rescatados, ámbar en perdidos, rojo en daño. El resto es gris.
     ///
-    /// Todo queda como GameObjects normales: se puede mover, cambiar de
-    /// color o borrar desde la jerarquia sin tocar el codigo.
+    /// 5. Todo el texto en español. Las cadenas que decide HUDController
+    ///    están allá; las fijas están aquí.
+    ///
+    /// Todo queda como GameObjects normales: se puede mover, recolorear o
+    /// borrar desde la jerarquía sin tocar el código.
     /// </summary>
     private static void ConstruirHUD()
     {
@@ -1987,6 +2270,14 @@ public static class FireRescuePolish
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 10;
 
+        // ScaleWithScreenSize con referencia 1920x1080 y match 0.5: el HUD
+        // se escala con la media geométrica de ancho y alto, así que
+        // conserva su proporción en cualquier ventana 16:9 y se degrada
+        // razonablemente fuera de esa proporción.
+        //
+        // OJO: el control "Scale" de la barra del Game View es zoom del
+        // editor, no resolución. Si el HUD se ve chico ahí es porque el
+        // panel es chico, no porque el Canvas esté mal.
         CanvasScaler escala = hud.GetComponent<CanvasScaler>();
         escala.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         escala.referenceResolution = new Vector2(1920f, 1080f);
@@ -1997,100 +2288,112 @@ public static class FireRescuePolish
         HUDController ctrl = hud.AddComponent<HUDController>();
         ctrl.client = Object.FindAnyObjectByType<SimulationClient>();
 
-        Color tinta = Hex("EDF1F5");
-        Color tenue = Hex("94A0AC");
-        Color azul = Hex("6FA8DC");
-        Color rojo = Hex("D23B32");
+        Color tinta = Hex("F0F3F6");
+        Color tenue = Hex("97A3AF");
+        Color naranja = Hex("E8672A");
+        Color verde = Hex("3FAE72");
+        Color ambar = Hex("E8A33D");
+        Color rojo = Hex("D9453B");
 
-        // ---------- Fondos de borde ----------
-        Vineta(hud.transform, "VinetaSuperior", true, 210f, 0.80f);
-        Vineta(hud.transform, "VinetaInferior", false, 250f, 0.78f);
+        // ---------- Fondos ----------
+        Vineta(hud.transform, "VinetaSuperior", 260f, 0.62f);
+        VinetaEsquina(hud.transform, "VinetaEsquina", 760f, 460f, 0.66f);
 
         // ---------- Identidad, arriba a la izquierda ----------
         RectTransform ident = Grupo(hud.transform, "Identidad",
-            new Vector2(0f, 1f), new Vector2(44f, -38f),
-            new Vector2(620f, 96f));
+            new Vector2(0f, 1f), new Vector2(48f, -42f),
+            new Vector2(760f, 130f));
 
-        Barra(ident, "Acento", new Vector2(0f, -1f),
-              new Vector2(3f, 56f), rojo);
+        // En vez del filete rojo de antes va el icono de llama. Una insignia
+        // se lee como juego; una barra de color se lee como panel de datos.
+        IconoUI(ident, "Emblema", "T_IconFuego",
+              new Vector2(0f, -2f), 34f, naranja);
 
-        Texto(ident, "Titulo", "FIRE RESCUE",
-            new Vector2(18f, 0f), new Vector2(520f, 34f),
-            28f, tinta, FontStyles.Bold,
-            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 7f);
-
-        ctrl.estrategiaTexto = Texto(ident, "Estrategia", "...",
-            new Vector2(19f, -36f), new Vector2(520f, 18f),
-            14f, azul, FontStyles.Bold,
+        Texto(ident, "Titulo", "FLASH POINT",
+            new Vector2(48f, -2f), new Vector2(620f, 40f),
+            34f, tinta, FontStyles.Bold,
             TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 9f);
 
-        ctrl.estadoPunto = Punto(ident, "EstadoPunto",
-            new Vector2(20f, -62f), 9f, azul);
+        Texto(ident, "EstrategiaEtiqueta", "ESTRATEGIA",
+            new Vector2(49f, -46f), new Vector2(150f, 22f),
+            16f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 11f);
 
-        ctrl.estadoTexto = Texto(ident, "Estado", "STANDBY",
-            new Vector2(37f, -64f), new Vector2(480f, 18f),
-            13f, tenue, FontStyles.Bold,
-            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 7f);
+        ctrl.estrategiaTexto = Texto(ident, "Estrategia", "...",
+            new Vector2(178f, -46f), new Vector2(560f, 22f),
+            16f, naranja, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 11f);
+
+        ctrl.estadoPunto = Punto(ident, "EstadoPunto",
+            new Vector2(51f, -80f), 11f, tenue);
+
+        ctrl.estadoTexto = Texto(ident, "Estado", "ESPERANDO SERVIDOR",
+            new Vector2(72f, -82f), new Vector2(620f, 22f),
+            16f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 8f);
 
         // ---------- Turno, arriba a la derecha ----------
         RectTransform reloj = Grupo(hud.transform, "Turno",
-            new Vector2(1f, 1f), new Vector2(-44f, -38f),
-            new Vector2(240f, 96f));
+            new Vector2(1f, 1f), new Vector2(-48f, -42f),
+            new Vector2(300f, 120f));
 
-        Texto(reloj, "TurnoEtiqueta", "TURN",
-            new Vector2(0f, 0f), new Vector2(230f, 16f),
-            12f, tenue, FontStyles.Bold,
-            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 11f);
+        Texto(reloj, "TurnoEtiqueta", "TURNO",
+            new Vector2(0f, 0f), new Vector2(290f, 20f),
+            15f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 13f);
 
         ctrl.turnoTexto = Texto(reloj, "Turno", "000",
-            new Vector2(2f, -16f), new Vector2(230f, 62f),
-            52f, tinta, FontStyles.Bold,
+            new Vector2(3f, -20f), new Vector2(290f, 76f),
+            66f, tinta, FontStyles.Bold,
             TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 1f);
 
         // ---------- Objetivos, abajo a la izquierda ----------
-        RectTransform objetivos = Grupo(hud.transform, "Objetivos",
-            new Vector2(0f, 0f), new Vector2(44f, 44f),
-            new Vector2(AnchoFila, 200f));
+        // Se apilan de abajo hacia arriba: daño abajo (es el que late
+        // cuando el edificio está por caerse y conviene tenerlo cerca del
+        // borde), después perdidos, arriba rescatados.
+        float yDanio = 0f;
+        float yPerdidas = AltoFilaDanio + SeparacionFila;
+        float yRescate = yPerdidas + AltoFila + SeparacionFila;
 
-        // De arriba hacia abajo: rescatadas, perdidas, daño. El daño va
-        // al final porque es el que cambia de color y conviene tenerlo
-        // junto al borde, donde se nota el latido.
-        GameObject fRescate = Fila(objetivos, "RescuePanel", 168f,
-            "VICTIMS RESCUED", "T_IconRescate", Hex("35A06A"),
-            tinta, tenue,
+        RectTransform objetivos = Grupo(hud.transform, "Objetivos",
+            new Vector2(0f, 0f), new Vector2(48f, 48f),
+            new Vector2(AnchoFila, yRescate + AltoFila));
+
+        GameObject fRescate = Fila(objetivos, "RescuePanel", yRescate,
+            AltoFila, "CIVILES RESCATADOS", "T_IconRescate",
+            verde, tinta, tenue,
             out ctrl.rescatadasTexto, out ctrl.rescatadasBarra,
             out ctrl.rescatadasFlash);
 
         ctrl.rescatadasPanel = fRescate.GetComponent<RectTransform>();
 
-        GameObject fPerdidas = Fila(objetivos, "CasualtyPanel", 98f,
-            "VICTIMS LOST", "T_IconPerdida", Hex("E8A33D"),
-            tinta, tenue,
+        GameObject fPerdidas = Fila(objetivos, "CasualtyPanel", yPerdidas,
+            AltoFila, "CIVILES PERDIDOS", "T_IconPerdida",
+            ambar, tinta, tenue,
             out ctrl.perdidasTexto, out ctrl.perdidasBarra,
             out ctrl.perdidasFlash);
 
         ctrl.perdidasPanel = fPerdidas.GetComponent<RectTransform>();
 
-        GameObject fDanio = Fila(objetivos, "DamagePanel", 28f,
-            "STRUCTURAL INTEGRITY", "T_IconDanio", rojo,
-            tinta, tenue,
+        GameObject fDanio = Fila(objetivos, "DamagePanel", yDanio,
+            AltoFilaDanio, "DAÑO ESTRUCTURAL", "T_IconDanio",
+            rojo, tinta, tenue,
             out ctrl.danioTexto, out ctrl.danioBarra,
             out ctrl.danioFlash);
 
         ctrl.danioPanel = fDanio.GetComponent<RectTransform>();
 
-        // STABLE / WARNING / CRITICAL / COLLAPSE, debajo del numero.
-        ctrl.danioEtiqueta = Texto(fDanio.transform, "Estado", "STABLE",
-            new Vector2(0f, -28f), new Vector2(150f, 16f),
-            11f, tenue, FontStyles.Bold,
-            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 9f);
+        // ESTABLE / RIESGO / CRÍTICO / COLAPSO, debajo del número.
+        ctrl.danioEtiqueta = Texto(fDanio.transform, "Estado", "ESTABLE",
+            new Vector2(0f, -44f), new Vector2(220f, 20f),
+            14f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 10f);
 
         // ---------- Overlay final ----------
         ConstruirOverlay(hud.transform, ctrl, tinta, tenue);
 
-        // ---------- Tipografia ----------
-        // Se aplica al final y de una sola pasada para que alcance
-        // tambien al overlay sin repetir la asignacion en cada Texto().
+        // ---------- Tipografía ----------
+        // Al final y de una pasada, para que alcance también al overlay.
         TMP_FontAsset fuente = CrearFuente();
 
         if (fuente != null)
@@ -2104,12 +2407,9 @@ public static class FireRescuePolish
         EditorUtility.SetDirty(hud);
     }
 
-    private const float AnchoFila = 360f;
-    private const float AltoFila = 56f;
-
     /// <summary>
-    /// Contenedor vacio anclado a una esquina. Sirve para mover un
-    /// bloque entero del HUD arrastrando un solo objeto.
+    /// Contenedor vacío anclado a una esquina. Sirve para mover un bloque
+    /// entero del HUD arrastrando un solo objeto.
     /// </summary>
     private static RectTransform Grupo(
         Transform padre,
@@ -2133,60 +2433,13 @@ public static class FireRescuePolish
         return rt;
     }
 
-    /// <summary>
-    /// Degradado pegado a un borde de la pantalla. Reemplaza a los
-    /// paneles: oscurece lo justo para que el texto se lea sin dibujar
-    /// un recuadro alrededor.
-    /// </summary>
-    private static void Vineta(
+    /// <summary>Icono tintado, anclado arriba a la izquierda del padre.</summary>
+    private static Image IconoUI(
         Transform padre,
         string nombre,
-        bool arriba,
-        float alto,
-        float opacidad
-    )
-    {
-        GameObject go = new GameObject(nombre,
-            typeof(RectTransform), typeof(Image));
-
-        go.transform.SetParent(padre, false);
-        go.transform.SetAsFirstSibling();
-
-        RectTransform rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0f, arriba ? 1f : 0f);
-        rt.anchorMax = new Vector2(1f, arriba ? 1f : 0f);
-
-        // Pivote al centro: al voltear la de abajo en Y, el giro pasa
-        // por el centro del rect y se queda en su sitio. Con el pivote
-        // en el borde se saldria de la pantalla.
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition =
-            new Vector2(0f, arriba ? -alto * 0.5f : alto * 0.5f);
-        rt.sizeDelta = new Vector2(0f, alto);
-
-        if (!arriba)
-        {
-            rt.localScale = new Vector3(1f, -1f, 1f);
-        }
-
-        Image img = go.GetComponent<Image>();
-        img.color = new Color(0.02f, 0.03f, 0.045f, opacidad);
-        img.raycastTarget = false;
-
-        Sprite s = Sprite("T_Vineta");
-
-        if (s != null)
-        {
-            img.sprite = s;
-        }
-    }
-
-    /// <summary>Rectangulo solido. Se usa para el filete de acento.</summary>
-    private static Image Barra(
-        Transform padre,
-        string nombre,
+        string sprite,
         Vector2 posicion,
-        Vector2 tamano,
+        float lado,
         Color color
     )
     {
@@ -2200,27 +2453,109 @@ public static class FireRescuePolish
         rt.anchorMax = new Vector2(0f, 1f);
         rt.pivot = new Vector2(0f, 1f);
         rt.anchoredPosition = posicion;
-        rt.sizeDelta = tamano;
+        rt.sizeDelta = new Vector2(lado, lado);
 
         Image img = go.GetComponent<Image>();
         img.color = color;
         img.raycastTarget = false;
+        img.preserveAspect = true;
+
+        Sprite s = Sprite(sprite);
+
+        if (s != null)
+        {
+            img.sprite = s;
+        }
 
         return img;
     }
 
     /// <summary>
-    /// Una fila de objetivo: icono, etiqueta, valor y barra fina.
+    /// Degradado pegado al borde superior. Sustituye a los paneles: oscurece
+    /// lo justo para que el texto se lea, sin dibujar un recuadro.
+    /// </summary>
+    private static void Vineta(
+        Transform padre,
+        string nombre,
+        float alto,
+        float opacidad
+    )
+    {
+        GameObject go = new GameObject(nombre,
+            typeof(RectTransform), typeof(Image));
+
+        go.transform.SetParent(padre, false);
+        go.transform.SetAsFirstSibling();
+
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = new Vector2(0f, alto);
+
+        Image img = go.GetComponent<Image>();
+        img.color = new Color(0.02f, 0.03f, 0.045f, opacidad);
+        img.raycastTarget = false;
+
+        Sprite s = Sprite("T_Vineta");
+
+        if (s != null)
+        {
+            img.sprite = s;
+        }
+    }
+
+    /// <summary>
+    /// Viñeta de esquina para el bloque de objetivos. Se oscurece hacia la
+    /// esquina inferior izquierda y se desvanece en las dos direcciones, así
+    /// que no tiene ningún borde recto visible.
+    /// </summary>
+    private static void VinetaEsquina(
+        Transform padre,
+        string nombre,
+        float ancho,
+        float alto,
+        float opacidad
+    )
+    {
+        GameObject go = new GameObject(nombre,
+            typeof(RectTransform), typeof(Image));
+
+        go.transform.SetParent(padre, false);
+        go.transform.SetAsFirstSibling();
+
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.zero;
+        rt.pivot = Vector2.zero;
+        rt.anchoredPosition = Vector2.zero;
+        rt.sizeDelta = new Vector2(ancho, alto);
+
+        Image img = go.GetComponent<Image>();
+        img.color = new Color(0.02f, 0.03f, 0.045f, opacidad);
+        img.raycastTarget = false;
+
+        Sprite s = Sprite("T_VinetaEsquina");
+
+        if (s != null)
+        {
+            img.sprite = s;
+        }
+    }
+
+    /// <summary>
+    /// Una fila de objetivo: icono, etiqueta, número grande y barra fina.
     ///
-    /// El pivote va a media altura para que el golpe de animacion de
-    /// HUDController crezca desde el centro de la fila. Con el pivote
-    /// en una esquina, el panel se estiraria hacia un lado al recibir
-    /// el golpe.
+    /// El pivote va a media altura para que el golpe de animación de
+    /// HUDController crezca desde el centro de la fila. Con el pivote en una
+    /// esquina, la fila se estiraría hacia un lado al recibir el golpe.
     /// </summary>
     private static GameObject Fila(
         Transform padre,
         string nombre,
         float y,
+        float alto,
         string titulo,
         string nombreIcono,
         Color acento,
@@ -2239,46 +2574,26 @@ public static class FireRescuePolish
         rt.anchorMin = Vector2.zero;
         rt.anchorMax = Vector2.zero;
         rt.pivot = new Vector2(0f, 0.5f);
-        rt.anchoredPosition = new Vector2(0f, y);
-        rt.sizeDelta = new Vector2(AnchoFila, AltoFila);
+        rt.anchoredPosition = new Vector2(0f, y + alto * 0.5f);
+        rt.sizeDelta = new Vector2(AnchoFila, alto);
 
         flash = Capa(fila.transform, "Flash", acento);
 
-        Sprite ic = Sprite(nombreIcono);
-
-        if (ic != null)
-        {
-            GameObject go = new GameObject("Icono",
-                typeof(RectTransform), typeof(Image));
-
-            go.transform.SetParent(fila.transform, false);
-
-            RectTransform irt = go.GetComponent<RectTransform>();
-            irt.anchorMin = new Vector2(0f, 1f);
-            irt.anchorMax = new Vector2(0f, 1f);
-            irt.pivot = new Vector2(0f, 1f);
-            irt.anchoredPosition = new Vector2(0f, -1f);
-            irt.sizeDelta = new Vector2(18f, 18f);
-
-            Image img = go.GetComponent<Image>();
-            img.sprite = ic;
-            img.color = acento;
-            img.preserveAspect = true;
-            img.raycastTarget = false;
-        }
+        IconoUI(fila.transform, "Icono", nombreIcono,
+              new Vector2(0f, -1f), 26f, acento);
 
         Texto(fila.transform, "Titulo", titulo,
-            new Vector2(28f, -2f), new Vector2(215f, 18f),
-            12f, tenue, FontStyles.Bold,
-            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 8f);
+            new Vector2(38f, -3f), new Vector2(270f, 22f),
+            15f, tenue, FontStyles.Bold,
+            TextAlignmentOptions.TopLeft, new Vector2(0f, 1f), 10f);
 
         valor = Texto(fila.transform, "Valor", "0 / 0",
-            new Vector2(0f, -1f), new Vector2(150f, 26f),
-            20f, tinta, FontStyles.Bold,
+            new Vector2(0f, -2f), new Vector2(200f, 38f),
+            30f, tinta, FontStyles.Bold,
             TextAlignmentOptions.TopRight, new Vector2(1f, 1f), 1f);
 
-        // Riel: 4 pixeles de alto y ancho completo de la fila. Una barra
-        // delgada se lee como HUD; una gruesa se lee como grafica.
+        // Riel de 5 píxeles pegado al borde inferior. Una barra delgada se
+        // lee como HUD; una gruesa se lee como gráfica de reporte.
         GameObject riel = new GameObject("BarraFondo",
             typeof(RectTransform), typeof(Image));
 
@@ -2289,7 +2604,7 @@ public static class FireRescuePolish
         rrt.anchorMax = new Vector2(1f, 0f);
         rrt.pivot = new Vector2(0.5f, 0f);
         rrt.anchoredPosition = new Vector2(0f, 4f);
-        rrt.sizeDelta = new Vector2(0f, 4f);
+        rrt.sizeDelta = new Vector2(0f, 5f);
 
         Image rimg = riel.GetComponent<Image>();
         rimg.color = new Color(1f, 1f, 1f, 0.10f);
@@ -2301,7 +2616,7 @@ public static class FireRescuePolish
         {
             rimg.sprite = capsula;
             rimg.type = Image.Type.Sliced;
-            rimg.pixelsPerUnitMultiplier = 9f;
+            rimg.pixelsPerUnitMultiplier = 7f;
         }
 
         GameObject relleno = new GameObject("BarraRelleno",
@@ -2315,9 +2630,8 @@ public static class FireRescuePolish
         frt.offsetMin = Vector2.zero;
         frt.offsetMax = Vector2.zero;
 
-        // El relleno va sin sprite a proposito: con Image.Type.Filled el
-        // 9-slice no aplica, y a 4 pixeles de alto la punta cuadrada no
-        // se distingue de una redondeada.
+        // El relleno va sin sprite: con Image.Type.Filled el 9-slice no
+        // aplica, y a 5 píxeles de alto la punta cuadrada no se distingue.
         barra = relleno.GetComponent<Image>();
         barra.color = acento;
         barra.raycastTarget = false;
@@ -2387,136 +2701,6 @@ public static class FireRescuePolish
     }
 
     // ---------- Piezas de UI ----------
-
-    private static GameObject PanelMetrica(
-        Transform padre,
-        string nombre,
-        string titulo,
-        float y,
-        Color fondo,
-        Color acento,
-        string nombreIcono,
-        out TMP_Text valor,
-        out Image barra,
-        out Image flash
-    )
-    {
-        GameObject panel = Panel(padre, nombre,
-            new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(32f, y), new Vector2(430f, 92f), fondo);
-
-        Acento(panel.transform, acento);
-
-        flash = Capa(panel.transform, "Flash", acento);
-
-        // Icono a la izquierda, con su propio recuadro tenue.
-        GameObject caja = new GameObject("IconoFondo",
-            typeof(RectTransform), typeof(Image));
-
-        caja.transform.SetParent(panel.transform, false);
-
-        RectTransform cajaRt = caja.GetComponent<RectTransform>();
-        cajaRt.anchorMin = new Vector2(0f, 1f);
-        cajaRt.anchorMax = new Vector2(0f, 1f);
-        cajaRt.pivot = new Vector2(0f, 1f);
-        cajaRt.anchoredPosition = new Vector2(20f, -16f);
-        cajaRt.sizeDelta = new Vector2(46f, 46f);
-
-        Image cajaImg = caja.GetComponent<Image>();
-        cajaImg.color = new Color(acento.r, acento.g, acento.b, 0.14f);
-        cajaImg.raycastTarget = false;
-
-        Sprite redondo = Sprite("T_Panel");
-
-        if (redondo != null)
-        {
-            cajaImg.sprite = redondo;
-            cajaImg.type = Image.Type.Sliced;
-            cajaImg.pixelsPerUnitMultiplier = 3.2f;
-        }
-
-        Sprite icono = Sprite(nombreIcono);
-
-        if (icono != null)
-        {
-            GameObject ic = new GameObject("Icono",
-                typeof(RectTransform), typeof(Image));
-
-            ic.transform.SetParent(caja.transform, false);
-
-            RectTransform icRt = ic.GetComponent<RectTransform>();
-            icRt.anchorMin = new Vector2(0.5f, 0.5f);
-            icRt.anchorMax = new Vector2(0.5f, 0.5f);
-            icRt.pivot = new Vector2(0.5f, 0.5f);
-            icRt.anchoredPosition = Vector2.zero;
-            icRt.sizeDelta = new Vector2(26f, 26f);
-
-            Image icImg = ic.GetComponent<Image>();
-            icImg.sprite = icono;
-            icImg.color = acento;
-            icImg.raycastTarget = false;
-            icImg.preserveAspect = true;
-        }
-
-        Texto(panel.transform, "Titulo", titulo,
-            new Vector2(78f, -16f), new Vector2(280f, 20f),
-            13f, Hex("8A96A3"), FontStyles.Bold);
-
-        valor = Texto(panel.transform, "Valor", "0 / 0",
-            new Vector2(78f, -34f), new Vector2(280f, 34f),
-            28f, Hex("E8EDF2"), FontStyles.Bold);
-
-        // Riel de la barra
-        GameObject riel = new GameObject("BarraFondo",
-            typeof(RectTransform), typeof(Image));
-
-        riel.transform.SetParent(panel.transform, false);
-
-        RectTransform rielRt = riel.GetComponent<RectTransform>();
-        rielRt.anchorMin = new Vector2(0f, 1f);
-        rielRt.anchorMax = new Vector2(0f, 1f);
-        rielRt.pivot = new Vector2(0f, 1f);
-        rielRt.anchoredPosition = new Vector2(20f, -74f);
-        rielRt.sizeDelta = new Vector2(392f, 9f);
-
-        Image rielImg = riel.GetComponent<Image>();
-        rielImg.color = new Color(1f, 1f, 1f, 0.10f);
-
-        Sprite capsula = Sprite("T_Panel");
-
-        if (capsula != null)
-        {
-            rielImg.sprite = capsula;
-            rielImg.type = Image.Type.Sliced;
-            rielImg.pixelsPerUnitMultiplier = 9f;
-        }
-
-        GameObject relleno = new GameObject("BarraRelleno",
-            typeof(RectTransform), typeof(Image));
-
-        relleno.transform.SetParent(riel.transform, false);
-
-        RectTransform relRt = relleno.GetComponent<RectTransform>();
-        relRt.anchorMin = Vector2.zero;
-        relRt.anchorMax = Vector2.one;
-        relRt.offsetMin = Vector2.zero;
-        relRt.offsetMax = Vector2.zero;
-
-        barra = relleno.GetComponent<Image>();
-        barra.color = acento;
-
-        if (capsula != null)
-        {
-            barra.sprite = capsula;
-        }
-
-        barra.type = Image.Type.Filled;
-        barra.fillMethod = Image.FillMethod.Horizontal;
-        barra.fillOrigin = (int)Image.OriginHorizontal.Left;
-        barra.fillAmount = 0f;
-
-        return panel;
-    }
 
     private static GameObject Panel(
         Transform padre,

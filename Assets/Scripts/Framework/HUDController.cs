@@ -92,6 +92,30 @@ public class HUDController : MonoBehaviour
         return client != null && client.ultimoResultado == "en_curso";
     }
 
+    /// <summary>
+    /// Si la partida YA TERMINÓ de verdad.
+    ///
+    /// No es lo mismo que "no está en curso". Antes de la primera respuesta
+    /// del servidor, SimulationClient.ultimoResultado vale "sin conectar",
+    /// que tampoco es "en_curso"; con la condición anterior la pantalla
+    /// final salía nada más darle Play, con todos los contadores en cero.
+    ///
+    /// Aquí se comparan solo los tres estados terminales que manda el
+    /// servidor. Son los mismos que usa flashpoint_model.py, así que si
+    /// alguna vez cambian allá hay que cambiarlos aquí.
+    /// </summary>
+    private bool Termino()
+    {
+        if (client == null)
+        {
+            return false;
+        }
+
+        return client.ultimoResultado == "victoria"
+            || client.ultimoResultado == "derrota_colapso"
+            || client.ultimoResultado == "derrota_victimas";
+    }
+
     private int rescatadasPrevias = -1;
     private int perdidasPrevias = -1;
     private int danioPrevio = -1;
@@ -180,7 +204,7 @@ public class HUDController : MonoBehaviour
         perdidasPrevias = client.perdidas;
         danioPrevio = client.danio;
 
-        if (!EnCurso() && !overlayMostrado)
+        if (Termino() && !overlayMostrado)
         {
             MostrarOverlay();
         }
@@ -237,22 +261,22 @@ public class HUDController : MonoBehaviour
 
         if (d >= limiteDanio)
         {
-            etiqueta = "COLLAPSE";
+            etiqueta = "COLAPSO";
             color = colorCritico;
         }
         else if (d >= limiteDanio - 7)
         {
-            etiqueta = "CRITICAL";
+            etiqueta = "CRÍTICO";
             color = colorCritico;
         }
         else if (d >= limiteDanio / 2 - 3)
         {
-            etiqueta = "WARNING";
+            etiqueta = "RIESGO";
             color = colorAviso;
         }
         else
         {
-            etiqueta = "STABLE";
+            etiqueta = "ESTABLE";
             color = colorSeguro;
         }
 
@@ -275,28 +299,29 @@ public class HUDController : MonoBehaviour
         switch (client.ultimoResultado)
         {
             case "victoria":
-                estado = "MISSION SUCCESS";
+                estado = "MISIÓN CUMPLIDA";
                 color = colorSeguro;
                 break;
 
             case "derrota_colapso":
-                estado = "STRUCTURAL COLLAPSE";
+                estado = "COLAPSO ESTRUCTURAL";
                 color = colorCritico;
                 break;
 
             case "derrota_victimas":
-                estado = "CASUALTY LIMIT";
+                estado = "DEMASIADAS VÍCTIMAS";
                 color = colorCritico;
                 break;
 
             case "en_curso":
-                estado = "OPERATION ACTIVE";
+                estado = "OPERACIÓN EN CURSO";
                 color = colorInfo;
                 break;
 
             default:
-                estado = "STANDBY";
-                color = new Color(0.6f, 0.65f, 0.7f);
+                // Mientras no llega la primera respuesta del servidor.
+                estado = "ESPERANDO SERVIDOR";
+                color = new Color(0.62f, 0.66f, 0.72f);
                 break;
         }
 
@@ -313,13 +338,13 @@ public class HUDController : MonoBehaviour
         switch (valor)
         {
             case "aleatoria":
-                return "RANDOM BASELINE";
+                return "ALEATORIA";
 
             case "mejorada":
-                return "TACTICAL AI";
+                return "MEJORADA";
 
             case "mejorada_sin_coordinacion":
-                return "TACTICAL AI (SOLO)";
+                return "MEJORADA SIN COORDINACIÓN";
 
             default:
                 return string.IsNullOrEmpty(valor) ? "..." : valor.ToUpper();
@@ -382,25 +407,27 @@ public class HUDController : MonoBehaviour
         switch (client.ultimoResultado)
         {
             case "victoria":
-                titulo = "MISSION SUCCESS";
-                subtitulo = "Civiles evacuados. Estructura contenida.";
+                titulo = "MISIÓN CUMPLIDA";
+                subtitulo = "Civiles rescatados. Estructura estable.";
                 acento = colorSeguro;
                 break;
 
             case "derrota_colapso":
-                titulo = "STRUCTURAL COLLAPSE";
+                titulo = "COLAPSO ESTRUCTURAL";
                 subtitulo = "El edificio cedió. Misión fallida.";
                 acento = colorCritico;
                 break;
 
             case "derrota_victimas":
-                titulo = "CASUALTY LIMIT REACHED";
-                subtitulo = "Demasiadas víctimas perdidas. Misión fallida.";
+                titulo = "DEMASIADAS VÍCTIMAS";
+                subtitulo = "Se perdieron cuatro civiles. Misión fallida.";
                 acento = colorCritico;
                 break;
 
             default:
-                titulo = client.ultimoResultado;
+                // No debería llegar aquí: Termino() filtra los estados que
+                // no son de fin de partida.
+                titulo = "PARTIDA TERMINADA";
                 subtitulo = "";
                 acento = colorInfo;
                 break;
@@ -412,9 +439,9 @@ public class HUDController : MonoBehaviour
         Escribir(
             overlayEstadisticas,
             $"TURNOS   <b>{client.turno}</b>\n" +
-            $"RESCATADAS   <b>{client.rescatadas} / {objetivoRescate}</b>\n" +
-            $"PERDIDAS   <b>{client.perdidas} / {limitePerdidas}</b>\n" +
-            $"DAÑO   <b>{client.danio} / {limiteDanio}</b>\n" +
+            $"CIVILES RESCATADOS   <b>{client.rescatadas} / {objetivoRescate}</b>\n" +
+            $"CIVILES PERDIDOS   <b>{client.perdidas} / {limitePerdidas}</b>\n" +
+            $"DAÑO ESTRUCTURAL   <b>{client.danio} / {limiteDanio}</b>\n" +
             $"ESTRATEGIA   <b>{NombreEstrategia(client.estrategiaActiva)}</b>"
         );
 

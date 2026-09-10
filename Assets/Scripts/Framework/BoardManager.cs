@@ -37,6 +37,10 @@ public class BoardManager : MonoBehaviour
     [Tooltip("Opcional. Marcador de falsa alarma ya revelada.")]
     public GameObject falseAlarmPrefab;
 
+    [Tooltip("Opcional. Ráfaga de vapor al apagar fuego o humo. " +
+             "Si se deja vacío no se dibuja nada y todo lo demás sigue igual.")]
+    public GameObject steamPrefab;
+
     public Transform firefightersParent;
 
     public int rows = 6;
@@ -548,6 +552,12 @@ public class BoardManager : MonoBehaviour
 
         SyncFirefighters(state.bomberos);
 
+        // Se guardan las celdas con fuego y con humo ANTES de sincronizar
+        // para poder comparar después. Es la única forma de saber que un
+        // bombero apagó algo sin cambiar el protocolo con Python.
+        HashSet<string> fuegoAntes = new HashSet<string>(fireObjects.Keys);
+        HashSet<string> humoAntes = new HashSet<string>(smokeObjects.Keys);
+
         SyncMarkers(
             fireObjects,
             state.fuegos,
@@ -571,6 +581,100 @@ public class BoardManager : MonoBehaviour
         );
 
         SyncPOIs(state.pois);
+
+        MostrarApagados(fuegoAntes, humoAntes);
+    }
+
+    /// <summary>
+    /// Dibuja una ráfaga de vapor donde se apagó fuego o humo.
+    ///
+    /// Puramente visual: no cambia ningún dato, no manda nada al servidor
+    /// y si steamPrefab está vacío no hace absolutamente nada.
+    /// </summary>
+    private void MostrarApagados(
+        HashSet<string> fuegoAntes,
+        HashSet<string> humoAntes
+    )
+    {
+        if (steamPrefab == null)
+        {
+            return;
+        }
+
+        // Fuego que ya no está: en Flash Point el fuego solo baja porque
+        // un bombero lo apagó, así que siempre lleva vapor.
+        foreach (string clave in fuegoAntes)
+        {
+            if (!fireObjects.ContainsKey(clave))
+            {
+                Vapor(clave, 1f);
+            }
+        }
+
+        // Humo que ya no está: solo cuenta si tampoco quedó fuego en la
+        // misma celda. Si quedó fuego, no lo apagaron: el humo se
+        // convirtió en fuego por flashover y no corresponde el vapor.
+        foreach (string clave in humoAntes)
+        {
+            if (!smokeObjects.ContainsKey(clave) &&
+                !fireObjects.ContainsKey(clave))
+            {
+                Vapor(clave, 0.7f);
+            }
+        }
+    }
+
+    private void Vapor(string clave, float escala)
+    {
+        if (!TryParseCellKey(clave, out int fila, out int columna))
+        {
+            return;
+        }
+
+        GameObject go = Spawn(
+            steamPrefab,
+            CellToWorld(fila, columna, 0.18f),
+            Quaternion.identity,
+            transform,
+            $"Steam_{fila + 1}_{columna + 1}"
+        );
+
+        if (go == null)
+        {
+            return;
+        }
+
+        go.transform.localScale *= escala;
+
+        // El sistema de partículas se destruye solo al terminar
+        // (Stop Action = Destroy en el prefab). Este Destroy es la red de
+        // seguridad por si alguien cambia esa opción en el inspector.
+        Destroy(go, 3f);
+    }
+
+    /// <summary>
+    /// Deshace CellKey. Se hace aquí y no con un diccionario aparte para
+    /// no guardar dos veces la misma información.
+    /// </summary>
+    private bool TryParseCellKey(string clave, out int fila, out int columna)
+    {
+        fila = 0;
+        columna = 0;
+
+        if (string.IsNullOrEmpty(clave))
+        {
+            return false;
+        }
+
+        int corte = clave.IndexOf('_');
+
+        if (corte <= 0 || corte >= clave.Length - 1)
+        {
+            return false;
+        }
+
+        return int.TryParse(clave.Substring(0, corte), out fila)
+            && int.TryParse(clave.Substring(corte + 1), out columna);
     }
 
     private void SyncFirefighters(FirefighterState[] firefighters)

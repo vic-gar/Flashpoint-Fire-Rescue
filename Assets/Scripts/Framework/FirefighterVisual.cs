@@ -40,6 +40,12 @@ public class FirefighterVisual : MonoBehaviour
     [Tooltip("Inclinación hacia adelante mientras avanza, en grados.")]
     public float inclinacion = 7f;
 
+    [Tooltip("Segundos de retraso por bombero. El bombero 1 arranca de " +
+             "inmediato, el 2 un poco después, y así. Con 0 salen todos a " +
+             "la vez.")]
+    [Range(0f, 0.25f)]
+    public float escalonPorId = 0.07f;
+
     [Header("Identidad del bombero")]
     [Tooltip("Un material por bombero. El id del bombero elige cuál. " +
              "Los llena el menú Tools > Fire Rescue.")]
@@ -59,6 +65,19 @@ public class FirefighterVisual : MonoBehaviour
 
     private Vector3 posicionSuave;
     private Vector3 velocidad;
+
+    // Destino retrasado. El servidor manda un turno completo de golpe, así
+    // que los seis bomberos cambian de celda en el mismo frame y el ojo no
+    // alcanza a seguir a ninguno. Retrasar unas centésimas el arranque de
+    // cada uno los desfasa lo justo para poder mirarlos uno por uno.
+    //
+    // Solo afecta al hijo Visual. La posición lógica del objeto raíz
+    // cambia igual de inmediato que antes, así que no se altera ninguna
+    // regla ni ningún resultado.
+    private Vector3 destinoRetrasado;
+    private Vector3 destinoPendiente;
+    private float tiempoDeSalida;
+    private int miId = 1;
     private float faseRebote;
     private Quaternion giroObjetivo = Quaternion.identity;
 
@@ -70,6 +89,8 @@ public class FirefighterVisual : MonoBehaviour
         }
 
         posicionSuave = transform.position;
+        destinoRetrasado = transform.position;
+        destinoPendiente = transform.position;
         giroObjetivo = transform.rotation;
     }
 
@@ -78,7 +99,8 @@ public class FirefighterVisual : MonoBehaviour
     // nombre con el id. En Awake todavía no lo tiene.
     void Start()
     {
-        AplicarColor(idForzado >= 0 ? idForzado : DeducirId());
+        miId = idForzado >= 0 ? idForzado : DeducirId();
+        AplicarColor(miId);
     }
 
     /// <summary>
@@ -176,6 +198,8 @@ public class FirefighterVisual : MonoBehaviour
     {
         // Al reaparecer no debe venir arrastrando la posición vieja.
         posicionSuave = transform.position;
+        destinoRetrasado = transform.position;
+        destinoPendiente = transform.position;
         velocidad = Vector3.zero;
     }
 
@@ -189,7 +213,21 @@ public class FirefighterVisual : MonoBehaviour
             return;
         }
 
-        Vector3 destino = transform.position;
+        // El destino real se guarda y se suelta unas centésimas después,
+        // distintas para cada bombero.
+        if (transform.position != destinoPendiente)
+        {
+            destinoPendiente = transform.position;
+            tiempoDeSalida =
+                Time.time + escalonPorId * Mathf.Max(0, miId - 1);
+        }
+
+        if (Time.time >= tiempoDeSalida)
+        {
+            destinoRetrasado = destinoPendiente;
+        }
+
+        Vector3 destino = destinoRetrasado;
         Vector3 anterior = posicionSuave;
 
         posicionSuave = Vector3.SmoothDamp(
