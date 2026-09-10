@@ -4,32 +4,13 @@ using UnityEngine.InputSystem;
 /// <summary>
 /// Cámara superior desplazable para el tablero de Fire Rescue.
 ///
-/// Responsabilidad: mover y acercar la cámara. Nada más. No habla con el
-/// servidor, no toca BoardManager ni SimulationClient, no conoce las
-/// reglas del juego y no cambia ninguna posición de agente. Es una capa
-/// puramente visual: si se borra este script, la simulación sigue
-/// funcionando igual.
+/// Guarda un punto de enfoque sobre el plano del tablero. WASD mueve ese
+/// punto y el zoom cambia la altura; la posición de la cámara se calcula
+/// a partir de los dos, así que siempre apunta al mismo sitio. Es una
+/// capa visual: si se borra, la simulación sigue funcionando igual.
 ///
-/// Cubre el requisito del reto: "La simulación se visualizará en Unity
-/// con una vista superior en 2D utilizando modelos en 3D, permitiendo
-/// desplazar la cámara por todo el escenario".
-///
-/// Cómo funciona, en corto:
-/// se guarda un "punto de enfoque" sobre el plano del tablero (el punto
-/// que la cámara mira). Moverse con WASD cambia ese punto; el zoom
-/// cambia la altura. La posición de la cámara se calcula a partir de
-/// esos dos valores más el ángulo de inclinación, así que la cámara
-/// siempre apunta al mismo sitio sin importar cuánto se acerque.
-///
-/// COMPATIBILIDAD: usa el Input System nuevo
-/// (Keyboard.current, Mouse.current) porque el proyecto tiene
-/// Active Input Handling = "Input System Package (New)". Con esa
-/// configuración la API vieja (Input.GetAxis, Input.mouseScrollDelta)
-/// lanza una excepción en tiempo de ejecución. Si alguien cambiara el
-/// proyecto a "Input Manager (Old)" este archivo dejaría de compilar.
-///
-/// Probado contra Unity 6000.5.7f1 con Built-in Render Pipeline. No usa
-/// Cinemachine ni ningún paquete externo.
+/// Usa el Input System nuevo (Keyboard.current, Mouse.current), que es
+/// el que tiene activado el proyecto.
 /// </summary>
 [RequireComponent(typeof(Camera))]
 public class TopDownCameraController : MonoBehaviour

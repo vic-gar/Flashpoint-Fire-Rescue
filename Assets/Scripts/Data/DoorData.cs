@@ -1,3 +1,7 @@
+/// <summary>
+/// Una puerta. Guarda las dos celdas que comunica, porque en Flash Point
+/// las puertas están en la arista entre dos celdas y no dentro de una.
+/// </summary>
 [System.Serializable]
 public class DoorData
 {

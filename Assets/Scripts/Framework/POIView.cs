@@ -1,5 +1,9 @@
 using UnityEngine;
 
+/// <summary>
+/// Componente del marcador de POI en la escena. Al revelarse avisa por
+/// consola si era un civil o una falsa alarma.
+/// </summary>
 public class POIView : MonoBehaviour
 {
     private POIData data;
@@ -11,6 +15,10 @@ public class POIView : MonoBehaviour
         revealed = false;
     }
 
+    /// <summary>
+    /// Se llama la primera vez que un bombero comprueba el marcador.
+    /// Las siguientes veces no hace nada.
+    /// </summary>
     public void Reveal()
     {
         if (revealed)

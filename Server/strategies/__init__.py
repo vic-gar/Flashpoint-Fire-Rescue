@@ -4,8 +4,8 @@ Toda estrategia es una función decide(model, firefighter) que devuelve
 UNA acción legal del catálogo de FirefighterAgent.get_legal_actions()
 o None para terminar el turno guardando los AP que queden.
 
-    aleatoria                  línea base del criterio 1 de la rúbrica
-    mejorada                   A* + priorización + coordinación (criterio 2)
+    aleatoria                  línea base: elige al azar entre lo legal
+    mejorada                   A* + priorización + coordinación
     mejorada_sin_coordinacion  igual pero sin repartir objetivos, para
                                medir por separado cuánto aporta coordinar
 

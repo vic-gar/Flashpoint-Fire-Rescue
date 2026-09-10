@@ -1,20 +1,10 @@
-"""Agente bombero: acciones posibles y su ejecución.
+"""Agente bombero: qué puede hacer y cómo lo hace.
 
-Responsabilidad: saber qué puede hacer un bombero con los AP que tiene
-(get_legal_actions) y aplicar la acción elegida sobre el tablero
-(execute_action). El bombero NO decide: la decisión la toma la
-estrategia activa (strategies/), que recibe el catálogo y devuelve una
-acción. Así la aleatoria y la mejorada juegan con las mismas reglas.
-
-Se conecta con: FlashPointModel._take_actions (quien pide la decisión
-y ejecuta), model/board.py (para consultar y cambiar el tablero) y
-run_batch.py (que lee los contadores por bombero como métricas).
-
-Origen: constructor, reset_action_points, move_to, open_door y la idea
-del catálogo de acciones al azar son del agente original de Víctor. AP
-guardados, víctimas, extinción, paredes, el catálogo completo de
-acciones legales y las métricas se agregaron en la Fase 1 con apoyo de
-Claude y se revisan con tests/test_rules.py.
+get_legal_actions arma el catálogo de lo que el bombero puede hacer con
+los AP que le quedan, y execute_action aplica la acción elegida sobre el
+tablero. El bombero no decide: eso lo hace la estrategia activa, que
+recibe el catálogo y devuelve una acción. Así la aleatoria y la mejorada
+juegan con exactamente las mismas reglas.
 
 Formato de las acciones (tuplas, la primera posición dice cuál es):
     ("move", fila, columna)
@@ -40,8 +30,7 @@ class FirefighterAgent(mesa.Agent):
     un máximo acumulado de 4 tal como indica el reglamento.
     """
 
-    # Costos del reglamento Family. NO MODIFICAR SIN REVISAR: cambian el
-    # catálogo de acciones y con él los resultados de los experimentos.
+    # Costos en AP que fija el reglamento.
     ACTION_POINTS_PER_TURN = 4
     MAX_SAVED_ACTION_POINTS = 4
 
@@ -88,8 +77,6 @@ class FirefighterAgent(mesa.Agent):
     # propiedades que traducen. Al ser derivadas de self.pos no pueden
     # quedar desincronizadas con el MultiGrid.
     #
-    # NO MODIFICAR SIN REVISAR: el orden (x, y) = (columna, fila) es el
-    # de Mesa, verificado contra mesa.space en la versión instalada.
     # =====================================================
 
     @property

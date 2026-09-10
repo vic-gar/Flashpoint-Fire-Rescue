@@ -1,24 +1,14 @@
-"""Corre partidas en lote y guarda las métricas reales en CSV.
+"""Corre partidas en lote y guarda las métricas en CSV.
 
-Es la base de la evidencia de los criterios 2 (estrategia mejorada) y
-3 (rendimiento) de la rúbrica. Todo lo que imprime sale de partidas
-completas del modelo Mesa; no hay ningún número estimado.
-Desarrollado con apoyo de Claude; los números son del modelo.
+Todo lo que imprime sale de partidas completas del modelo; no hay ningún
+número estimado.
 
-Comparación con semillas pareadas: la partida i de cada estrategia
-arranca con la misma semilla, así que las tres parten del mismo tablero,
-del mismo mazo de POI y de la misma secuencia de dados del fuego.
-Cualquier diferencia se debe a la estrategia y no a la suerte del
-sorteo. Esto es cierto porque el modelo usa generadores separados para
-el fuego, los POI y las decisiones al azar (ver
-FlashPointModel._create_random_generators y tests/test_rng.py).
-
-Métricas por partida (una fila por semilla en resultados_<estrategia>.csv):
-    victoria, víctimas rescatadas/perdidas/reveladas, falsas alarmas,
-    daño estructural, turnos, derribos, replanificaciones, celdas
-    recorridas, AP gastados y desperdiciados (arriba del tope de 4
-    guardados), fuegos y humos apagados, paredes cortadas, fuegos al
-    final y tiempo en milisegundos.
+Semillas pareadas: la partida i de cada estrategia arranca con la misma
+semilla, así que las tres juegan el mismo tablero, el mismo mazo de POI
+y los mismos dados del fuego. Cualquier diferencia viene de la
+estrategia y no del sorteo. Esto funciona porque el modelo usa
+generadores separados para el fuego, los POI y las decisiones al azar
+(ver FlashPointModel._create_random_generators).
 
 Uso (desde la carpeta Server):
 
@@ -26,11 +16,8 @@ Uso (desde la carpeta Server):
     python run_batch.py 50 mejorada      50 partidas con la mejorada
     python run_batch.py 100 comparar     las 3 estrategias, semillas 0-99
 
-Con "comparar" se generan:
-    resultados_aleatoria.csv
-    resultados_mejorada.csv
-    resultados_mejorada_sin_coordinacion.csv
-    resultados_comparacion.csv     (una fila por estrategia, promedios)
+Con "comparar" se generan un CSV por estrategia, con una fila por
+partida, y resultados_comparacion.csv con los promedios.
 """
 
 import csv
@@ -60,6 +47,9 @@ def run_batch(runs=30, strategy=None, seed_start=0, board_file="data/final.txt")
     results = []
 
     for i in range(runs):
+        # Semillas pareadas: la partida i de cada estrategia usa la misma
+        # semilla, así que todas juegan el mismo tablero con los mismos
+        # dados y la diferencia solo puede venir de la estrategia.
         seed = seed_start + i
 
         start = time.perf_counter()

@@ -1,3 +1,7 @@
+/// <summary>
+/// Un bombero: dónde está, cuántos puntos de acción le quedan y si va
+/// cargando a alguien.
+/// </summary>
 [System.Serializable]
 public class FirefighterData
 {

@@ -1,3 +1,6 @@
+/// <summary>
+/// Una celda que empieza la partida con fuego.
+/// </summary>
 [System.Serializable]
 public class FireData
 {

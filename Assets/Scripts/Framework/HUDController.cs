@@ -6,18 +6,14 @@ using TMPro;
 /// <summary>
 /// Interfaz de mando de Fire Rescue.
 ///
-/// Responsabilidad: leer el estado que YA recibe SimulationClient y
-/// pintarlo. No abre ninguna conexión propia, no habla con Python y no
-/// conoce las reglas. Si se borra este componente la simulación sigue
-/// funcionando exactamente igual.
+/// Lee el estado que ya recibe SimulationClient y lo pinta en pantalla.
+/// No abre ninguna conexión propia ni conoce las reglas. Si se borra
+/// este componente la simulación sigue funcionando igual.
 ///
 /// Todas las referencias se asignan desde el Inspector. El HUD son
 /// GameObjects reales bajo Canvases/GameHUD: se pueden mover, recolorear
 /// y reescribir sin tocar este archivo. Aquí solo vive el comportamiento
 /// (números, barras, colores y microanimaciones).
-///
-/// Construido con el menú Tools > Fire Rescue > Construir HUD, que crea
-/// la jerarquía y deja este componente ya cableado.
 /// </summary>
 public class HUDController : MonoBehaviour
 {

@@ -1,40 +1,28 @@
 """Elección del objetivo que más conviene atender.
 
-Responsabilidad: dado un bombero, puntuar cada víctima revelada y cada
-POI boca abajo del tablero y devolver el mejor con su ruta. Lo llama
-improved_strategy.py una vez por acción. Usa astar.py para el costo
-real de cada ruta y coordination.py para saber cuántos bomberos ya van
-al mismo objetivo.
+Puntúa cada víctima revelada y cada POI boca abajo del tablero y
+devuelve el mejor junto con su ruta. Lo llama improved_strategy.py una
+vez por acción; usa astar.py para el costo de cada ruta y
+coordination.py para saber cuántos bomberos ya van al mismo sitio.
 
-ARCHIVO DE REFERENCIA: docs/referencia_luis/prioritization_heuristic.py,
-de Luis. Se conserva su idea de puntuar cada objetivo con varios
-factores (distancia, peligro y urgencia) y quedarse con el mejor. Es la
-regla "siempre elige la mejor opción disponible" (heurística voraz).
-Reescrita con apoyo de Claude por tres razones: la función principal
-original se caía con "unhashable type: Victim", medía la distancia en
-línea recta cuando en este tablero lo que cuenta es el costo de
-planeación de la ruta (AP equivalentes, entre paredes, puertas y fuego),
-y no tenía forma de saber qué objetivos ya tomaron otros bomberos.
-
-Regla de puntuación (menor es mejor, todo en AP equivalentes):
+Es una heurística voraz: se puntúa cada objetivo y se toma el mejor.
+Menor puntuación es mejor y todo va en AP equivalentes.
 
     costo de la ruta A* hasta el objetivo
   + castigo si es un POI sin revelar (podría ser falsa alarma)
-  - bonificación si el fuego ya toca al objetivo (urgencia)
+  - bonificación si el fuego ya toca al objetivo
   + castigo por cada otro bombero que ya va al mismo objetivo
   - bonificación si es el objetivo que este bombero ya traía
 
-La última línea evita que el bombero cambie de objetivo por diferencias
-mínimas y se quede oscilando entre dos POI igual de lejanos.
+La última línea evita que el bombero oscile entre dos POI igual de
+lejanos.
 """
 
 from strategies import astar
 from strategies.coordination import CROWDING_PENALTY
 
 
-# NO MODIFICAR SIN REVISAR: cambiar estos pesos modifica los resultados
-# de los experimentos. Se probaron variantes (4, 5, 8, 2) en bloques de
-# 30 semillas y ninguna fue consistentemente mejor.
+# Cambiar estos pesos cambia los resultados de los experimentos.
 
 # Un POI sin revelar vale menos que una víctima confirmada porque uno de
 # cada tres marcadores del juego es falsa alarma.

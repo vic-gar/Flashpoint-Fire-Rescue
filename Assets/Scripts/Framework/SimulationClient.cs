@@ -5,38 +5,26 @@ using UnityEngine.Networking;
 /// <summary>
 /// Cliente que conecta la escena de Unity con el servidor de Python.
 ///
-/// Responsabilidad: hablar HTTP con Server/server.py y entregar cada
-/// estado recibido a BoardManager.ApplyState(). No dibuja nada ni
-/// conoce las reglas del juego; la simulación completa corre en Python.
-/// Es el lado cliente del criterio 4 (cliente-servidor).
-///
-/// Integración cliente-servidor desarrollada con apoyo de Claude
-/// siguiendo la plantilla WebClient.cs vista en TC2008B, con dos
-/// correcciones necesarias:
-///
-/// 1. La plantilla usa EditorJsonUtility, que solo existe dentro del
-///    editor y falla en una compilación del juego. Aquí se usa
-///    JsonUtility, que funciona en ambos.
-/// 2. La plantilla hace una sola petición en Start(). Aquí se pide un
-///    turno cada cierto tiempo, que es lo que hace falta para ver la
-///    simulación avanzar.
+/// Habla HTTP con Server/server.py y entrega cada estado recibido a
+/// BoardManager.ApplyState(). No dibuja nada ni conoce las reglas del
+/// juego; la simulación completa corre en Python.
 ///
 /// Flujo: al arrancar manda POST /reset con la estrategia y la semilla
 /// del inspector (o GET /state si resetOnConnect está apagado) y luego,
 /// en bucle, POST /step cada secondsBetweenSteps segundos. Cada
 /// respuesta es el estado completo de la partida (SimulationState.cs).
 ///
-/// COMPATIBILIDAD CON UNITY: el puerto, los nombres de los endpoints y
-/// las llaves del JSON deben coincidir con server.py. Cómo usarlo: un
-/// GameObject vacío con este componente y un BoardManager en la escena.
+/// El puerto, los nombres de los endpoints y las llaves del JSON tienen
+/// que coincidir con server.py. Para usarlo basta un GameObject vacío
+/// con este componente y un BoardManager en la escena.
 /// </summary>
 public class SimulationClient : MonoBehaviour
 {
     [Header("Servidor")]
     public string host = "http://localhost";
 
-    // COMPATIBILIDAD CON UNITY: el valor que manda es el del inspector,
-    // no este. Si la escena guardó otro puerto, hay que cambiarlo ahí.
+    // El valor que se manda es el del inspector, no este. Si la escena
+    // guardó otro puerto, hay que cambiarlo ahí.
     public int port = 3000;
 
     [Tooltip("aleatoria, mejorada o mejorada_sin_coordinacion. Se envía al servidor al reiniciar.")]

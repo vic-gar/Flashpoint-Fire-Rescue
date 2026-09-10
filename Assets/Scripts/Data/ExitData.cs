@@ -1,3 +1,6 @@
+/// <summary>
+/// Una salida del edificio. Es a donde los bomberos llevan a los civiles.
+/// </summary>
 [System.Serializable]
 public class ExitData
 {

@@ -4,8 +4,7 @@ Corre una simulación de Flash Point con la estrategia indicada y
 muestra turno por turno lo que hace cada bombero, cómo avanza el
 fuego y cómo termina la partida. Sirve para depurar sin Unity; el
 servidor (server.py) y los experimentos (run_batch.py) usan el mismo
-modelo. Parte del main.py original de Víctor, ampliado con la
-selección de estrategia y el resumen final.
+modelo. Incluye la selección de estrategia y un resumen al final.
 
 Uso (los argumentos van en cualquier orden):
 
@@ -26,6 +25,9 @@ def main():
     verbose = True
     strategy_name = "mejorada"
 
+    # Los argumentos se reconocen por su forma, no por su posición:
+    # un número es la semilla, "mudo" apaga el detalle y cualquier otra
+    # palabra tiene que ser el nombre de una estrategia.
     for arg in sys.argv[1:]:
         if arg.isdigit():
             seed = int(arg)

@@ -1,3 +1,7 @@
+/// <summary>
+/// Un marcador de posible víctima. Hasta que un bombero llega a la celda
+/// no se sabe si es un civil ('v') o una falsa alarma ('f').
+/// </summary>
 [System.Serializable]
 public class POIData
 {

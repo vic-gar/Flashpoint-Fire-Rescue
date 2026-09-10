@@ -1,37 +1,20 @@
 """Reparto de objetivos entre los seis bomberos.
 
-Responsabilidad: llevar la tabla "qué objetivo eligió cada bombero" para
-que, al elegir, cada uno tome en cuenta a los demás. La tabla vive en el
-modelo (model.target_assignments) y la consulta prioritization.py a
-través de others_on(); improved_strategy.py la actualiza en cada acción.
+Guarda qué objetivo eligió cada bombero, en model.target_assignments.
+prioritization.py lo consulta con others_on() e improved_strategy.py lo
+actualiza en cada acción.
 
-ARCHIVO DE REFERENCIA: docs/referencia_luis/best_response_coordination.py,
-de Luis, basado en el notebook de juegos del curso. De ahí se conserva
-la idea central: cada bombero elige su objetivo respondiendo a lo que ya
-eligieron los demás (mejor respuesta), de modo que no se amontonen sobre
-la misma víctima cuando hay alternativas. Reescrita con apoyo de Claude
-porque la versión original trabajaba con identificadores abstractos y
-con un historial de frecuencias que en nuestro modelo no existe; aquí se
-usan las celdas reales del tablero y el estado actual de la partida.
-
-Qué es exactamente lo que se implementa (para poder explicarlo bien):
-  - Jugadores: los seis bomberos.
-  - Opciones de cada uno: los POI y víctimas reveladas del tablero.
-  - Utilidad de una opción: el negativo de su costo de planeación por
-    la ruta A* (AP equivalentes), menos un castigo por cada OTRO
-    bombero que ya la eligió.
-  - Decisión: cada bombero, cuando le toca actuar, se queda con la
-    opción de mayor utilidad dado lo que los demás tienen asignado.
-Es una "mejor respuesta" al reparto actual, evaluada por turnos. No se
+La idea viene del notebook de juegos del curso: cada bombero elige
+respondiendo a lo que ya eligieron los demás (mejor respuesta), para que
+no se amontonen sobre la misma víctima cuando hay alternativas. No se
 calcula ningún equilibrio ni se aprende de partidas anteriores; el
-reparto emerge de que todos aplican la misma regla en secuencia.
+reparto sale de que los seis aplican la misma regla en secuencia.
 """
 
 
 # Castigo en AP equivalentes por cada otro bombero que ya va al mismo
-# objetivo. Con 4 hace falta que la alternativa esté 4 AP más lejos
+# objetivo. Con 4, hace falta que la alternativa esté 4 AP más lejos
 # para preferir compartir objetivo en vez de repartirse.
-# NO MODIFICAR SIN REVISAR: cambia los resultados de los experimentos.
 CROWDING_PENALTY = 4
 
 

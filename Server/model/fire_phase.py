@@ -16,17 +16,13 @@ Al final se resuelven las consecuencias: los bomberos que quedaron
 en una celda con fuego son derribados y los POI que quedaron en
 una celda con fuego se pierden.
 
-Responsabilidad: solo esta fase. Quién la llama: FlashPointModel.step()
-una vez por turno, después de las acciones del bombero. Trabaja
-directamente sobre model.board y sobre los contadores del modelo.
+FlashPointModel.step() la llama una vez por turno, después de las
+acciones del bombero. Trabaja directamente sobre model.board y sobre
+los contadores del modelo.
 
-Origen: desarrollada con apoyo de Claude a partir del reglamento
-oficial del juego (FlashPointFireRescue.pdf) y revisada con
-tests/test_rules.py. El equipo debe poder explicar cada caso: humo,
-fuego, explosión, onda de choque y flashover.
-
-NO MODIFICAR SIN REVISAR: cualquier cambio aquí cambia los resultados
-de los experimentos de run_batch.py.
+Las reglas salen del reglamento oficial del juego y se verifican en
+tests/test_rules.py. Cualquier cambio aquí cambia los resultados de
+run_batch.py.
 """
 
 from model.board import CLEAR, SMOKE, FIRE

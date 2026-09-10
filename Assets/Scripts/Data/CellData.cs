@@ -1,3 +1,6 @@
+/// <summary>
+/// Una celda del tablero y las cuatro paredes que la rodean.
+/// </summary>
 [System.Serializable]
 public class CellData
 {
@@ -15,6 +18,10 @@ public class CellData
         this.column = column;
     }
 
+    /// <summary>
+    /// El archivo trae las paredes como cuatro caracteres en el orden
+    /// arriba, izquierda, abajo, derecha. Un 1 quiere decir que hay pared.
+    /// </summary>
     public void SetWalls(string wallCode)
     {
         wallUp = wallCode[0] == '1';

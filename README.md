@@ -93,6 +93,11 @@ python -m unittest discover -s tests -v
 150 pruebas: reglas del juego, servidor HTTP, estrategias, separación de
 generadores aleatorios y el espacio de Mesa.
 
+## Uso de IA
+
+El uso de herramientas de IA generativa se documenta en
+`docs/USO_DE_IA.txt`.
+
 ## Estructura
 
 ```
@@ -116,11 +121,9 @@ Server/
     run_batch.py                experimentos
 
 docs/
-    REPORTE.md                  reporte del proyecto
-    USO_DE_IA.md                declaración de uso de IA
+    REPORTE_FINAL.md            reporte del proyecto, con la narrativa
+    USO_DE_IA.txt               declaración de uso de IA
     LICENCIAS.md                licencias de tipografía e iconos
-    referencia_luis/            material original de Luis, con nota de qué
-                                se conservó de cada archivo
 ```
 
 El tablero `final.txt` está dos veces a propósito: Unity lo lee desde

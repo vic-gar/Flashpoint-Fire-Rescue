@@ -1,5 +1,9 @@
 using UnityEngine;
 
+/// <summary>
+/// Componente que lleva cada celda de la escena para saber qué fila y
+/// qué columna representa.
+/// </summary>
 public class CellView : MonoBehaviour
 {
     public int row;

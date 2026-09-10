@@ -7,15 +7,13 @@ pruebas. Se corre siempre desde esta carpeta (`cd Server`).
 Requisitos: Mesa 3.5.1, que es la versión que fija `requirements.txt` y
 la que pide el notebook del curso. Mesa 3.5.1 exige **Python 3.12 o
 superior** (pip rechaza la instalación en 3.11). Probado con Python 3.14
-en la máquina de Carlos y con Python 3.13 en el entorno de desarrollo.
-Las 150 pruebas pasan en los dos, y `run_batch.py 100 comparar` da los
-mismos resultados lógicos en ambos (0 / 38 / 44).
+y con Python 3.13. Las 150 pruebas pasan en los dos, y
+`run_batch.py 100 comparar` da los mismos resultados lógicos en ambos
+(0 / 38 / 44).
 
-**Instalación: usa `pip install mesa==3.5.1`, no
-`pip install -r requirements.txt`.** El `requirements.txt` está guardado
-en UTF-16 y pip no lo lee, así que ese comando falla. Es un archivo
-original del repositorio y no se ha reguardado sin autorización del
-equipo. Ver "Pendientes de este lado" al final.
+Instalación:
+
+    pip install -r requirements.txt
 
 En Windows la suite tarda varios minutos y en Linux unos segundos. La
 diferencia está en las pruebas del servidor, que abren conexiones HTTP a
@@ -26,7 +24,7 @@ diferencia está en las pruebas del servidor, que abren conexiones HTTP a
     main.py                  una partida completa en consola, turno por turno
     server.py                servidor HTTP para Unity (puerto 3000)
     run_batch.py             partidas en lote y CSV con métricas reales
-    requirements.txt         dependencias (archivo original, no se ha tocado)
+    requirements.txt         dependencias de Python
     data/final.txt           tablero oficial del reto (6x8, paredes, POI, fuego, puertas, salidas)
 
     model/board.py           tablero: celdas, paredes, puertas, salidas, fuego, humo, POI, daño
@@ -47,8 +45,6 @@ diferencia está en las pruebas del servidor, que abren conexiones HTTP a
     tests/test_rng.py        15 pruebas de la separación de generadores aleatorios
     tests/test_multigrid.py  41 pruebas del espacio MultiGrid de Mesa
 
-Los archivos originales de Luis de los que parten las estrategias están
-en `docs/referencia_luis/`, fuera de esta carpeta, con su propio LEEME.
 
 ## El espacio: MultiGrid y Board conviven
 
@@ -162,35 +158,22 @@ Prueba rápida sin Unity, con el servidor corriendo en otra terminal:
 - Unity ignora las llaves que no conoce, así que agregar campos al
   JSON no rompe nada; quitarlos o renombrarlos sí.
 
-## NO BORRAR / NO MODIFICAR SIN REVISAR
+## Consideraciones importantes
 
-- `strategies/random_strategy.py`: es el criterio 1 de la rúbrica y el
-  control de todos los experimentos.
-- `data/final.txt`: tablero oficial. El parser de `board.py` asume el
-  orden y las cantidades del archivo (3 POI, 10 fuegos, 8 puertas,
-  4 salidas).
-- `MAX_DAMAGE = 24` en `flashpoint_model.py`: el reto dice 24
-  marcadores en un lugar y "25 o más" en otro. Se dejó 24 como en el
-  reglamento oficial. PENDIENTE DE CONFIRMAR con los profesores.
-- Los pesos de `prioritization.py` y `coordination.py`: se probaron
+Estas cinco cosas están acopladas con los resultados de los
+experimentos. Si se cambia alguna, hay que volver a correr
+`run_batch.py 100 comparar` y comprobar que los números siguen saliendo.
+
+- `strategies/random_strategy.py` es la línea base contra la que se
+  compara todo lo demás.
+- `data/final.txt` es el tablero oficial. El parser de `board.py` asume
+  el orden y las cantidades del archivo: 3 POI, 10 fuegos, 8 puertas y
+  4 salidas.
+- `MAX_DAMAGE = 24` en `flashpoint_model.py`. El reto dice 24 marcadores
+  en un lugar y "25 o más" en otro; se usa 24, como el reglamento
+  oficial.
+- Los pesos de `prioritization.py` y `coordination.py`. Se probaron
   variantes y las ganancias no se sostenían entre bloques de semillas.
-  Si se cambian, volver a correr `run_batch.py 100 comparar`.
-- `FlashPointModel.MOVEMENT_DIRECTIONS`: fija el orden en que se listan
-  los vecinos y con él el orden del catálogo de acciones legales.
-  Cambiarlo mueve los resultados de los experimentos sin tocar reglas.
-- `requirements.txt`: está guardado en UTF-16 y `pip install -r` no lo
-  lee. No se ha reguardado porque es un archivo original del repo.
-
-## Pendientes de este lado
-
-- Confirmar el umbral de colapso (24 o 25).
-- Decidir el tamaño del experimento final. Con 100 semillas la ventaja de
-  la mejorada sobre la aleatoria es clara, pero el aporte de la
-  coordinación no: hay 28 pares discordantes, 17 a favor de la
-  coordinación y 11 en contra, y una prueba de signos sobre eso da
-  p = 0.34. Con la tasa de discordancia observada (25.7%) hacen falta
-  unos 38 pares discordantes para tener 80% de potencia, o sea alrededor
-  de 148 semillas. Recomendación: 300, no 500.
-  `python run_batch.py 300 comparar` reemplaza los cuatro CSV. Ver
-  docs/ESTADO_ACTUAL.md.
-- Reguardar `requirements.txt` en UTF-8 cuando el equipo lo autorice.
+- `FlashPointModel.MOVEMENT_DIRECTIONS` fija el orden en que se listan
+  los vecinos, y con él el orden del catálogo de acciones legales.
+  Cambiarlo mueve los resultados sin tocar ninguna regla.

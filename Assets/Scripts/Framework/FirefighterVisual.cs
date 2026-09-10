@@ -47,8 +47,7 @@ public class FirefighterVisual : MonoBehaviour
     public float escalonPorId = 0.07f;
 
     [Header("Identidad del bombero")]
-    [Tooltip("Un material por bombero. El id del bombero elige cuál. " +
-             "Los llena el menú Tools > Fire Rescue.")]
+    [Tooltip("Un material por bombero. El id del bombero elige cuál.")]
     public Material[] coloresPorId;
 
     [Tooltip("Dónde buscar. Vacío = todo el hijo Visual. Dentro de cada " +

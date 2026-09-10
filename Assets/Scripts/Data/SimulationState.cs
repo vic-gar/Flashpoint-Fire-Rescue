@@ -3,21 +3,19 @@ using System;
 /// <summary>
 /// Clases que reflejan el JSON que envía el servidor de Python.
 ///
-/// Responsabilidad: solo datos. SimulationClient.cs convierte el texto
+/// Son solo datos, sin lógica. SimulationClient.cs convierte el texto
 /// JSON en estas clases con JsonUtility y BoardManager.ApplyState las
-/// lee para dibujar. No tienen lógica a propósito.
+/// lee para dibujar.
 ///
-/// COMPATIBILIDAD CON UNITY: cada campo debe llamarse exactamente igual
-/// que la llave del JSON que arma FlashPointModel.get_state() en
-/// Server/model/flashpoint_model.py. JsonUtility no avisa si un nombre
-/// no coincide: deja el campo en su valor por defecto y la escena se
-/// vería mal sin ningún error. Por eso los nombres están en español,
-/// igual que en el servidor, y hay una prueba en Server/tests/
-/// test_server.py que lee este archivo y compara campo por campo.
-/// NO renombrar campos sin cambiar el servidor y correr esa prueba.
+/// Cada campo tiene que llamarse igual que la llave del JSON que arma
+/// FlashPointModel.get_state(). JsonUtility no avisa si un nombre no
+/// coincide: deja el campo en su valor por defecto y la escena se vería
+/// mal sin ningún error. Por eso los nombres están en español, como en
+/// el servidor, y hay una prueba en test_server.py que lee este archivo
+/// y compara campo por campo. Renombrar aquí obliga a cambiar el
+/// servidor y volver a correr esa prueba.
 ///
-/// Desarrolladas con apoyo de Claude siguiendo la plantilla
-/// cliente-servidor de TC2008B.
+/// Siguen la plantilla cliente-servidor vista en TC2008B.
 ///
 /// Nota: JsonUtility no sabe deserializar un arreglo suelto en la
 /// raíz del JSON. Aquí no hace falta ningún truco porque el servidor

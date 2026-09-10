@@ -1,40 +1,19 @@
-"""Búsqueda de rutas con A* sobre el tablero real de Flash Point.
+"""Búsqueda de rutas con A* sobre el tablero de Flash Point.
 
-Responsabilidad: dada una celda de inicio y una o varias metas, devolver
-la ruta de menor costo de planeación respetando paredes, puertas y fuego.
-Ese costo va en AP equivalentes: suma los AP reales de moverse, el AP de
-abrir cada puerta cerrada y un castigo extra (FIRE_PENALTY) por cada
-celda con fuego que se atraviesa. Por eso no es exactamente "la ruta con
-menos AP": el castigo hace que el algoritmo prefiera una ruta segura
-cuando un rodeo corto evita atravesar fuego. Lo usan prioritization.py
-(costo de planeación a cada objetivo) e improved_strategy.py (ruta a la
-salida cuando se carga una víctima, ruta al fuego más cercano).
+Dada una celda de inicio y una o varias metas, devuelve la ruta más
+barata respetando paredes, puertas y fuego. El costo va en AP
+equivalentes: los AP de moverse, uno más por cada puerta cerrada que hay
+que abrir, y un castigo extra por cada celda con fuego que se atraviesa.
+Ese castigo hace que el bombero prefiera un rodeo corto antes que cruzar
+fuego. Si carga una víctima, el fuego es intransitable.
 
-ARCHIVO DE REFERENCIA: docs/referencia_luis/astar_pathfinding.py, de
-Luis, que a su vez sigue el notebook "Path Planning" del curso.
-A* adaptado con apoyo de Claude a partir de ese algoritmo original. Se
-conserva su estructura (cola de prioridad con heapq, costo acumulado g,
-heurística Manhattan h y reconstrucción de la ruta con punteros al
-padre). Lo que cambia es el modelo del tablero: la versión original
-marcaba obstáculos como tipos de celda, pero en Flash Point las paredes
-y las puertas están en las aristas entre celdas, así que los vecinos
-salen de Board.can_move_between y no de una matriz de tipos.
-El equipo debe poder explicar g, h, vecinos válidos y reconstrucción.
+La heurística es la distancia Manhattan. Nunca sobreestima el costo real
+porque el movimiento es en cuatro direcciones y cada paso cuesta al
+menos 1 AP, así que la ruta que encuentra es la más barata.
 
-Cómo funciona A*, en corto:
-  1. Se parte de la celda inicial con costo 0.
-  2. Se saca de la cola la celda con menor f = g + h, donde g es el AP
-     acumulado para llegar y h es la distancia Manhattan al objetivo.
-  3. Se revisan sus vecinos alcanzables; si por esta celda se llega a un
-     vecino más barato que antes, se actualiza su costo y su padre.
-  4. Al sacar el objetivo de la cola se reconstruye la ruta siguiendo
-     los padres hacia atrás.
-Manhattan nunca sobreestima el costo de planeación (cada paso cuesta al
-menos 1), así que la ruta encontrada es la de menor costo de
-planeación. Para poder
-cerrar celdas sin volver a abrirlas hace falta además que la heurística
-sea consistente, y Manhattan lo es en una cuadrícula donde cada paso
-cambia la distancia en 1 como máximo.
+Los vecinos salen de Board.can_move_between y no de una matriz de tipos
+de celda, porque en Flash Point las paredes y las puertas están en las
+aristas entre celdas.
 """
 
 import heapq
@@ -47,8 +26,7 @@ DIRECTIONS = [
     (0, 1),
 ]
 
-# NO MODIFICAR SIN REVISAR: estos dos valores cambian las rutas y con
-# ellas los resultados de los experimentos.
+# Estos dos valores cambian las rutas y con ellas los resultados.
 
 # Entrar a fuego cuesta 2 AP reales. Se suma un castigo extra en la
 # planeación para que el bombero prefiera un rodeo corto antes que
@@ -170,8 +148,9 @@ def find_path(board, start, goals, carrying=False):
                     (new_cost + heuristic(neighbor), counter, neighbor)
                 )
 
-    # Se vació la cola sin tocar una meta: no hay ruta (a diferencia
-    # del original, aquí no se devuelve una ruta falsa).
+    # Se vació la cola sin tocar ninguna meta: no hay ruta. Se devuelve
+    # None a propósito, para que quien llama sepa que falló y no reciba
+    # una ruta incompleta que parezca válida.
     return None, None
 
 

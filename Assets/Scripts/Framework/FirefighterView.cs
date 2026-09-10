@@ -1,5 +1,9 @@
 using UnityEngine;
 
+/// <summary>
+/// Componente del objeto de un bombero en la escena. Guarda sus datos y
+/// los deja consultar desde fuera.
+/// </summary>
 public class FirefighterView : MonoBehaviour
 {
     private FirefighterData data;

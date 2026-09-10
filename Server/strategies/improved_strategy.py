@@ -1,57 +1,31 @@
-"""Estrategia mejorada: A* + priorización + coordinación + replaneación.
+"""Estrategia mejorada: A* + priorización + coordinación.
 
-Es la estrategia del criterio 2 de la rúbrica. Se llama una vez por
-acción: el modelo la invoca repetidamente durante el turno hasta que el
-bombero se queda sin AP o la estrategia devuelve None. Solo puede
-devolver acciones del catálogo firefighter.get_legal_actions(), así que
-no puede romper las reglas.
+Se llama una vez por acción. El modelo la invoca durante el turno hasta
+que el bombero se queda sin AP o hasta que devuelve None. Solo puede
+devolver acciones de firefighter.get_legal_actions(), así que no puede
+romper las reglas. Es determinista: no usa ningún generador aleatorio.
 
-Responsabilidad de este archivo: el ORDEN de decisión. Las piezas viven
-aparte: astar.py (rutas), prioritization.py (qué objetivo), y
-coordination.py (reparto entre bomberos). Es determinista: con el mismo
-tablero toma la misma decisión, no usa ningún generador aleatorio.
+Este archivo solo decide el ORDEN. Las piezas viven aparte: astar.py
+(rutas), prioritization.py (qué objetivo) y coordination.py (reparto
+entre bomberos).
 
-Origen: desarrollada con apoyo de Claude sobre las ideas de los
-algoritmos de Luis (ver docs/referencia_luis/LEEME.md). El orden de las
-reglas salió de medir partidas reales con run_batch.py; la regla 3 fue
-la decisión más importante y está explicada abajo. El equipo debe poder
-explicar cada regla y por qué está en ese lugar.
+Orden de decisión:
 
-Orden de decisión en cada llamada:
-
-  1. Si carga una víctima, va por la ruta más corta a una salida. Si el
-     fuego le cierra el paso, apaga el fuego de al lado.
+  1. Si carga una víctima, va a la salida más cercana.
   2. Si está parado sobre una víctima revelada, la carga (0 AP).
-  3. Control del incendio: si tiene fuego adyacente y le alcanza para
-     apagarlo del todo, lo apaga; si tiene humo adyacente, lo apaga.
-     Esta fue una de las reglas que más mejoró el comportamiento
-     durante las pruebas exploratorias: reducir fuego y humo disminuye
-     el riesgo de explosiones y flashover. Cada celda con fuego sube la
-     probabilidad de explosión en la tirada de dados, y el humo junto al
-     fuego se convierte en fuego en el flashover. Apagar humo cuesta
-     1 AP y evita un fuego, es la acción más barata del juego por
-     riesgo eliminado.
-  4. Elige objetivo: la víctima o POI con mejor puntuación (ver
-     prioritization.py), tomando en cuenta qué objetivos ya eligieron
-     los demás bomberos (ver coordination.py).
+  3. Apaga el fuego o el humo que tenga al lado.
+  4. Elige objetivo con prioritization.py.
   5. Si el siguiente paso de la ruta tiene fuego, lo apaga antes de
-     avanzar en lugar de atravesarlo.
-  6. Avanza un paso por la ruta, o abre la puerta que le estorba.
-  7. Si no le alcanzan los AP para el paso, los usa en apagar algo
-     adyacente; si tampoco, termina el turno y los guarda.
-  8. Sin objetivos alcanzables, se dedica al fuego más cercano.
+     cruzar.
+  6. Avanza un paso, o abre la puerta que le estorba.
+  7. Con los AP que sobren, apaga algo adyacente.
+  8. Sin objetivos alcanzables, va al fuego más cercano.
 
 Replaneación: la ruta no se guarda entre llamadas. En cada acción se
-vuelve a correr A* sobre el tablero tal como está, así que fuego nuevo,
-puertas destruidas o POI que desaparecen se toman en cuenta solos. Lo
-que sí se recuerda es el objetivo elegido, para no cambiarlo por
-diferencias mínimas; cuando cambia se cuenta como una replaneación en
+vuelve a correr A* sobre el tablero tal como está, así que el fuego
+nuevo se toma en cuenta solo. El objetivo elegido sí se recuerda, para
+no cambiarlo por diferencias mínimas; cada cambio suma 1 a
 model.replanifications.
-
-NO MODIFICAR SIN REVISAR: los pesos viven en prioritization.py y
-coordination.py. Se probaron variantes en dos bloques de 30 semillas y
-las que ganaban en un bloque perdían en el otro; los valores actuales
-son los que se comportaron igual en ambos.
 """
 
 from strategies import astar
@@ -62,7 +36,7 @@ from strategies.prioritization import choose_target
 def make_improved_strategy(use_coordination=True):
     """Construye la estrategia. Con use_coordination=False cada bombero
     ignora a los demás al elegir objetivo; sirve para medir cuánto
-    aporta coordinar (criterio de innovación)."""
+    aporta coordinar."""
 
     def decide(model, firefighter):
         board = model.board

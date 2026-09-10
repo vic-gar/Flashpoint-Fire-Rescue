@@ -1,23 +1,9 @@
-"""Servidor HTTP que expone la simulación de Flash Point a Unity.
+"""Servidor HTTP que expone la simulación a Unity.
 
-Responsabilidad: mantener UNA partida viva en memoria y dejar que Unity
-la consulte y la avance por HTTP. Es el lado servidor del criterio 4
-(cliente-servidor); el cliente es Assets/Scripts/Framework/
-SimulationClient.cs. Todo lo que se responde sale de
-FlashPointModel.get_state() y get_board_config().
-
-Integración HTTP desarrollada con apoyo de Claude siguiendo la
-plantilla cliente-servidor vista en TC2008B
-(tc2008b/template-project/tc2008B_server.py, de Sergio Ruiz-Loza),
-con tres correcciones necesarias para que funcione con datos reales:
-
-1. La plantilla arma la respuesta con str(diccionario), que produce
-   el repr de Python con comillas simples y no es JSON válido. Aquí
-   se usa json.dumps.
-2. La plantilla responde con Content-Type text/html. Aquí se responde
-   application/json, que es lo que corresponde.
-3. La plantilla solo tiene un endpoint de prueba con una posición
-   fija. Aquí cada endpoint sirve el estado real del modelo Mesa.
+Mantiene una partida viva en memoria y deja que Unity la consulte y la
+avance por HTTP. Todo lo que responde sale de get_state() y
+get_board_config() del modelo. El cliente es
+Assets/Scripts/Framework/SimulationClient.cs.
 
 Endpoints:
 
@@ -25,10 +11,8 @@ Endpoints:
     GET  /board    geometría fija del tablero (paredes, puertas, salidas)
     GET  /state    estado actual de la partida
     POST /step     avanza un turno y devuelve el estado resultante
-    POST /reset    reinicia la partida; acepta un JSON opcional con
-                   {"semilla": n, "estrategia": "<nombre de STRATEGIES>"}
-                   Nombres válidos hoy: aleatoria, mejorada,
-                   mejorada_sin_coordinacion (ver strategies/__init__.py).
+    POST /reset    reinicia; acepta {"semilla": n, "estrategia": "..."}
+                   con aleatoria, mejorada o mejorada_sin_coordinacion
 
 Uso:
 
@@ -36,14 +20,13 @@ Uso:
     python server.py 8080              puerto 8080
     python server.py 3000 aleatoria    puerto 3000, estrategia aleatoria
 
-COMPATIBILIDAD CON UNITY: SimulationClient.cs tiene el puerto 3000 por
-defecto. Si se cambia aquí hay que cambiarlo también en el inspector.
 Los nombres de los endpoints y las llaves del JSON son el contrato con
-Unity; no renombrar sin cambiar también el lado de C#.
+Unity: renombrarlos obliga a cambiar también el lado de C#. El puerto
+3000 está además en el inspector de SimulationClient.cs.
 
-Flujo por turno: Unity manda POST /step, el servidor llama
-model.step() (acciones del bombero, fuego, POI) y responde el estado
-completo; Unity lo dibuja y espera N segundos antes del siguiente.
+Turno a turno: Unity manda POST /step, el servidor llama model.step()
+y responde el estado completo, y Unity lo dibuja y espera unos segundos
+antes del siguiente.
 """
 
 import json
@@ -55,8 +38,8 @@ from model.flashpoint_model import FlashPointModel
 from strategies import STRATEGIES, get_strategy
 
 
-# NO MODIFICAR SIN REVISAR: el puerto también está en el inspector de
-# SimulationClient.cs y hay una prueba que verifica que sea 3000.
+# El puerto también está en el inspector de SimulationClient.cs y hay
+# una prueba que verifica que sea 3000.
 DEFAULT_PORT = 3000
 DEFAULT_SEED = 42
 DEFAULT_STRATEGY = "mejorada"

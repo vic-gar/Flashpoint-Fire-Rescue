@@ -1,25 +1,17 @@
 """Tablero de Flash Point: celdas, paredes, puertas, salidas, fuego, humo y POI.
 
-Responsabilidad: guardar el estado físico del edificio y responder
-preguntas sobre él (¿hay pared entre estas dos celdas?, ¿se puede pasar?,
-¿qué celdas tienen fuego?). No decide nada: las reglas de turno viven en
+Guarda el estado físico del edificio y responde preguntas sobre él
+(¿hay pared entre estas dos celdas?, ¿se puede pasar?, ¿qué celdas
+tienen fuego?). No decide nada: las reglas del turno están en
 flashpoint_model.py y fire_phase.py, y las acciones en
 firefighter_agent.py.
 
-El archivo data/final.txt es el mismo que Unity lee desde
-Assets/Resources (BoardFileReader.cs), así que las dos partes construyen
-el mismo edificio. NO MODIFICAR el orden de las secciones del archivo
-sin cambiar los dos lectores: este parser asume 6 filas de paredes,
-3 POI, 10 fuegos, 8 puertas y 4 salidas, en ese orden.
+data/final.txt es el mismo archivo que Unity lee desde Assets/Resources,
+así que los dos lados construyen el mismo edificio. El parser asume las
+secciones en este orden: 6 filas de paredes, 3 POI, 10 fuegos, 8 puertas
+y 4 salidas. Cambiar el orden obliga a cambiar los dos lectores.
 
-Origen: las estructuras de datos, el lector del archivo y las consultas
-de puertas y movimiento son de Víctor (can_move_between se ajustó al
-agregar paredes destruibles). Los estados de celda (humo y fuego), el
-daño de paredes, las salidas, las paredes cortables y el manejo de POI
-se agregaron en la Fase 1 con apoyo de Claude y se revisan con
-tests/test_rules.py.
-
-Coordenadas: filas 0 a 5 y columnas 0 a 7 en todo el código; el archivo
+Coordenadas: filas 0 a 5 y columnas 0 a 7 en todo el código. El archivo
 viene con base 1 y aquí se resta 1 al leerlo.
 """
 

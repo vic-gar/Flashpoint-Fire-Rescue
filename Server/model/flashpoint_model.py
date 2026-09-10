@@ -1,26 +1,17 @@
 """Modelo Mesa de la partida: turnos, fuego, POI y fin del juego.
 
-Responsabilidad: es el "dueño" de la partida. Junta el tablero
-(model/board.py), los bomberos (agents/firefighter_agent.py), la fase
-del fuego (model/fire_phase.py) y la estrategia activa (strategies/).
-Un paso del modelo es el turno completo de un bombero.
+Junta el tablero (model/board.py), los bomberos
+(agents/firefighter_agent.py), la fase del fuego (model/fire_phase.py) y
+la estrategia activa (strategies/). Un step() es el turno completo de un
+bombero: recupera AP, la estrategia decide y actúa, avanza el fuego y se
+reponen los POI.
 
-Se conecta con:
-  - server.py, que llama step() en cada POST /step y manda get_state()
-    a Unity;
-  - run_batch.py y main.py, que corren partidas completas con run_game();
-  - las estrategias, que reciben (model, firefighter) y devuelven una
-    acción del catálogo del bombero.
+Lo usan server.py (un step() por cada POST /step), run_batch.py y
+main.py (partidas completas con run_game()).
 
-Origen: el esqueleto (constructor con rng, colocación de los seis
-bomberos en las salidas y el bombero en turno) es de Víctor. Las reglas
-del juego, la fase del fuego, los POI, las condiciones de fin, el
-DataCollector, la estrategia intercambiable y la separación de RNG se
-desarrollaron con apoyo de Claude y se revisan con tests/test_rules.py.
-
-COMPATIBILIDAD CON UNITY: las llaves de get_state() y
-get_board_config() deben coincidir con los campos de
-Assets/Scripts/Data/SimulationState.cs. Hay una prueba que lo verifica.
+Las llaves de get_state() y get_board_config() tienen que coincidir con
+los campos de Assets/Scripts/Data/SimulationState.cs. Es el contrato con
+Unity y hay una prueba que lo verifica.
 """
 
 import random
@@ -34,9 +25,9 @@ from model.board import Board, CLEAR, SMOKE, FIRE
 from model import fire_phase
 
 
-# Resultados posibles de una partida.
-# COMPATIBILIDAD CON UNITY: SimulationClient.cs compara el texto
-# "en_curso" para saber si la partida sigue.
+# Resultados posibles de una partida. SimulationClient.cs compara el
+# texto "en_curso" para saber si la partida sigue, así que no se
+# renombran sin cambiar también el lado de Unity.
 RUNNING = "en_curso"
 WIN = "victoria"
 LOSS_VICTIMS = "derrota_victimas"
@@ -70,10 +61,9 @@ class FlashPointModel(mesa.Model):
     VICTIMS_TO_WIN = 7
     VICTIMS_TO_LOSE = 4
 
-    # PENDIENTE DE CONFIRMAR: el documento del reto es ambiguo entre 24 y
-    # 25 marcadores de daño. El reglamento del juego trae 24 contadores y
-    # termina la partida cuando se agotan, así que se usa 24. Es una
-    # constante para cambiarla si los profesores aclaran otra cosa.
+    # El documento del reto dice 24 marcadores en un lugar y "25 o más"
+    # en otro. El reglamento oficial trae 24 contadores y termina la
+    # partida cuando se colocan todos, así que usamos 24.
     MAX_DAMAGE = 24
 
     # Tope de seguridad por si una estrategia nunca termina la partida.
@@ -86,7 +76,7 @@ class FlashPointModel(mesa.Model):
         seed=None,
         verbose=False
     ):
-        # rng en vez de seed: es lo que pide Mesa 3.5 y lo que usaba Victor.
+        # rng en vez de seed: seed quedó obsoleto en Mesa 3.5.
         # Mesa crea con esto self.random y self.rng. En este proyecto NO se
         # usan: toda la aleatoriedad pasa por los tres generadores de
         # _create_random_generators, para saber siempre quién tira qué.
@@ -100,8 +90,8 @@ class FlashPointModel(mesa.Model):
 
         # Espacio oficial de Mesa para los bomberos. Se elige MultiGrid
         # y no SingleGrid porque el reto pide que "puede haber más de un
-        # agente por celda", que es el mismo criterio que usa el
-        # profesor en el notebook MoneyModel para elegir esta clase.
+        # agente por celda", que es el mismo criterio con el que se elige
+        # MultiGrid en el notebook MoneyModel del curso.
         #
         # Mesa ordena el grid como (ancho, alto) = (columnas, filas).
         # torus=False: el tablero es un edificio, no se sale por un lado
@@ -235,7 +225,7 @@ class FlashPointModel(mesa.Model):
     def _create_firefighters(self):
         """Coloca los seis bomberos en las entradas del archivo.
 
-        Reparto fijo que dejó Víctor: dos en cada una de las dos primeras
+        Reparto fijo: dos bomberos en cada una de las dos primeras
         entradas y uno en las otras dos. El reto no fija dónde arrancan;
         el reglamento solo pide que empiecen fuera del edificio.
         """
@@ -283,12 +273,10 @@ class FlashPointModel(mesa.Model):
     # Orden en que se recorren las direcciones: arriba, abajo,
     # izquierda, derecha. Es el mismo que usa Board.get_valid_neighbors.
     #
-    # NO MODIFICAR SIN REVISAR: el orden decide el orden del catálogo de
-    # acciones legales, y de ahí depende qué elige la estrategia
-    # aleatoria con la misma semilla. Cambiarlo cambia los resultados de
-    # los experimentos sin cambiar ninguna regla. Mesa devuelve la
-    # vecindad ordenada por (x, y), que sería izquierda, arriba, abajo,
-    # derecha, y por eso aquí se reordena a la convención del proyecto.
+    # El orden importa: decide el orden del catálogo de acciones legales
+    # y con él qué elige la estrategia aleatoria con una semilla dada.
+    # Mesa devuelve la vecindad ordenada por (x, y), o sea izquierda,
+    # arriba, abajo, derecha, así que aquí se reordena.
     MOVEMENT_DIRECTIONS = [
         (-1, 0),
         (1, 0),
@@ -590,10 +578,10 @@ class FlashPointModel(mesa.Model):
         Es lo que server.py responde en GET /state y POST /step.
         Se arma aquí porque el modelo es el dueño del estado.
 
-        COMPATIBILIDAD CON UNITY: cada llave debe coincidir letra por
-        letra con un campo de SimulationState.cs (JsonUtility no avisa
-        si un nombre no coincide, solo deja el campo vacío). Filas y
-        columnas van desde 0; Unity las usa igual.
+        Cada llave tiene que coincidir letra por letra con un campo de
+        SimulationState.cs, porque JsonUtility no avisa si un nombre no
+        coincide y solo deja el campo vacío. Filas y columnas van desde
+        0 y Unity las usa igual.
         """
         return {
             "resultado": self.result,
@@ -649,7 +637,7 @@ class FlashPointModel(mesa.Model):
         Es lo que server.py responde en GET /board. Incluye las
         paredes de cada celda, las puertas y las salidas. Hoy Unity
         construye el tablero leyendo final.txt por su cuenta
-        (BoardFileReader.cs de Víctor), así que este endpoint queda
+        (BoardFileReader.cs), así que este endpoint queda
         disponible por si más adelante el tablero cambia en el servidor.
         """
         return {
