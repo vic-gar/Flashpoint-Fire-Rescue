@@ -1,5 +1,5 @@
-# Dependencias del servidor de Flash Point: Fire Rescue.
-# Mesa 3.5.1 requiere Python 3.12 o superior.
+# Dependencias
+# Mesa 3.5.1 requiere Python 3.12 o superior
 #
 #   pip install -r requirements.txt
 

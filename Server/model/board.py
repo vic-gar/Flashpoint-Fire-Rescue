@@ -19,22 +19,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-# =========================================================
-# Estados posibles de una celda
-#
+# Estados pdeosibles de una celda
 # Una celda puede estar despejada, con humo o con fuego.
 # El humo se convierte en fuego cuando queda junto a fuego
 # o cuando le cae encima otro marcador de humo.
-# =========================================================
+
 
 CLEAR = 0
 SMOKE = 1
 FIRE = 2
 
 
-# =========================================================
 # Datos de una celda
-# =========================================================
 
 @dataclass
 class CellData:
@@ -47,12 +43,12 @@ class CellData:
     wall_right: bool
 
 
-# =========================================================
-# Punto de interés
+
+# POI
 #
 # Un POI empieza boca abajo. Cuando un bombero entra a su
 # celda se revela y se sabe si era víctima o falsa alarma.
-# =========================================================
+
 
 @dataclass
 class POIData:
@@ -71,9 +67,9 @@ class POIData:
         return self.poi_type == "f"
 
 
-# =========================================================
+
 # Fuego
-# =========================================================
+
 
 @dataclass
 class FireData:
@@ -81,9 +77,8 @@ class FireData:
     column: int
 
 
-# =========================================================
 # Puerta
-# =========================================================
+
 
 @dataclass
 class DoorData:
@@ -95,9 +90,9 @@ class DoorData:
     is_destroyed: bool = False
 
 
-# =========================================================
+
 # Entrada / salida
-# =========================================================
+
 
 @dataclass
 class ExitData:
@@ -105,9 +100,8 @@ class ExitData:
     column: int
 
 
-# =========================================================
+
 # Tablero
-# =========================================================
 
 class Board:
     ROWS = 6
@@ -160,9 +154,8 @@ class Board:
         self._load_doors(lines)
         self._load_exits(lines)
 
-    # =====================================================
     # Celdas y paredes
-    # =====================================================
+
 
     def _load_cells(self, lines):
         # Cada celda viene como 4 dígitos: arriba, izquierda, abajo,
@@ -201,10 +194,8 @@ class Board:
 
             self.cells.append(current_row)
 
-    # =====================================================
     # POI
-    # =====================================================
-
+    
     def _load_pois(self, lines):
         self.pois = []
 
@@ -226,13 +217,11 @@ class Board:
                 )
             )
 
-    # =====================================================
     # Fuego inicial
     #
     # El archivo trae las celdas que arrancan con fuego.
     # A partir de ahí el estado de cada celda vive en
     # cell_states y cambia durante la partida.
-    # =====================================================
 
     def _load_states(self, lines):
         self.cell_states = [
@@ -251,9 +240,9 @@ class Board:
 
             self.cell_states[row][column] = FIRE
 
-    # =====================================================
     # Puertas
-    # =====================================================
+    # 
+    
 
     def _load_doors(self, lines):
         self.doors = []
@@ -278,9 +267,9 @@ class Board:
                 )
             )
 
-    # =====================================================
+     
     # Entradas / salidas
-    # =====================================================
+    
 
     def _load_exits(self, lines):
         self.exits = []
@@ -301,9 +290,7 @@ class Board:
                 )
             )
 
-    # =====================================================
     # Consultas básicas
-    # =====================================================
 
     def is_inside(self, row, column):
         return (
@@ -318,9 +305,7 @@ class Board:
 
         return False
 
-    # =====================================================
     # Estado de las celdas: humo y fuego
-    # =====================================================
 
     def get_state(self, row, column):
         if not self.is_inside(row, column):
@@ -377,14 +362,12 @@ class Board:
     def count_fires(self):
         return len(self.fires)
 
-    # =====================================================
     # Paredes y daño estructural
     #
     # Cada pared se identifica por la arista entre las dos
     # celdas que separa. Las paredes del borde del edificio
     # también se pueden dañar, así que su "vecino" queda
     # fuera del tablero y eso es válido como identificador.
-    # =====================================================
 
     def _wall_key(self, row1, column1, row2, column2):
         # La pared entre A y B es la misma que entre B y A: se ordenan
@@ -471,9 +454,7 @@ class Board:
 
         return True
 
-    # =====================================================
     # Puertas
-    # =====================================================
 
     def get_door_between(self, row1, column1, row2, column2):
         for door in self.doors:
@@ -516,9 +497,7 @@ class Board:
         door.is_destroyed = True
         door.is_open = True
 
-    # =====================================================
     # Movimiento
-    # =====================================================
 
     def can_move_between(self, row1, column1, row2, column2):
         """Regla única de paso entre dos celdas vecinas.
@@ -711,9 +690,7 @@ class Board:
 
         return walls
 
-    # =====================================================
-    # Puntos de interés
-    # =====================================================
+    # POI's
 
     def get_poi_at(self, row, column):
         for poi in self.pois:

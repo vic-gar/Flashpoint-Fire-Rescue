@@ -4,7 +4,7 @@ Casi todo lo visual del proyecto lo hicimos nosotros. Lo que no, está aquí.
 
 ---
 
-## Tipografía: Barlow Condensed
+## Tipografia: BC
 
 - Archivos: `Assets/_Polish/Fonts/BarlowCondensed-{SemiBold,Medium,Bold}.ttf`
 - Autor: Jeremy Tribby y The Barlow Project Authors

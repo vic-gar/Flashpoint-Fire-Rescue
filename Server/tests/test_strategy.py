@@ -1,13 +1,9 @@
-"""Pruebas de la estrategia mejorada y de sus piezas.
+"""Pruebas de estrategia mejorada
+Corren sobre el tablero real, sirve para verificar A*,
+Que la priorizacion y la coordinacion si se comporten como afirmamos
 
-Corren sobre el tablero real de data/final.txt. Verifican que A*
-respeta la topología, que la priorización y la coordinación se
-comportan como se documenta, y que la estrategia nunca sale del
-catálogo de acciones legales del bombero.
 
-Ejecutar desde la carpeta Server:
 
-    python -m unittest discover -s tests -v
 """
 
 import os
