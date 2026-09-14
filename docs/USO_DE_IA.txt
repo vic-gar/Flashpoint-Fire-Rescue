@@ -1,0 +1,12 @@
+Uso de herramientas de IA generativa
+
+Para el desarrollo de este proyecto se utilizaron herramientas de inteligencia artificial generativa, su uso fue importante siendo Claude y ChatGPT OpenAI, como apoyo en la
+programación, la depuración y la redacción de documentación. El trabajo no partió de cero con IA pues el equipo desarrolló la base del tablero y la integración inicial en
+Unity, elaboraron versiones iniciales de los algoritmos que después sirvieron de referencia para la estrategia mejorada. 
+
+A partir de esa base, la IA se empleó para proponer implementaciones, localizar errores y comparar alternativas en el modelo de Mesa, las estrategias de los
+agentes, las pruebas automáticas, el servidor HTTP y el cliente de Unity. Todas las propuestas se probaron dentro del repositorio y se ajustaron según el
+comportamiento observado de la simulación.
+
+Los resultados presentados en este reporte provienen de las simulaciones ejecutadas con el código del repositorio. El equipo tomó las decisiones de diseño, 
+realizó la integración y los resultados presentados.

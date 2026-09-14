@@ -1,0 +1,63 @@
+newmtl madera
+Kd 0.478 0.325 0.204
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl tela
+Kd 0.325 0.376 0.431
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl sabana
+Kd 0.847 0.827 0.776
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl metal
+Kd 0.227 0.259 0.298
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl libros
+Kd 0.612 0.357 0.290
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl maceta
+Kd 0.635 0.376 0.247
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl hoja
+Kd 0.306 0.486 0.290
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl carton
+Kd 0.659 0.506 0.306
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl cinta
+Kd 0.788 0.749 0.651
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+

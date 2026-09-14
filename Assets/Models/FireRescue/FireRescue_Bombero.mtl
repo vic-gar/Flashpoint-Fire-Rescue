@@ -1,0 +1,35 @@
+newmtl cuerpo
+Kd 0.753 0.224 0.169
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl casco
+Kd 0.945 0.769 0.059
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl tanque
+Kd 0.173 0.243 0.314
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl reflejante
+Kd 0.949 0.961 0.663
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
+newmtl piel
+Kd 0.851 0.643 0.478
+Ks 0.05 0.05 0.05
+Ns 10
+d 1
+illum 2
+
