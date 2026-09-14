@@ -101320,7 +101320,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::SimulationClient
   host: http://localhost
   port: 3000
-  strategy: aleatoria
+  strategy: mejorada
   seed: 42
   secondsBetweenSteps: 1.2
   autoStart: 1
